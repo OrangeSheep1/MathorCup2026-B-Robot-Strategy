@@ -1,0 +1,14 @@
+action_id,trajectory_type,direction_tag,height_tag,range_tag,target_zone,source_type,description
+A01,linear,front,middle_high,middle,head_torso,derived_from_action_definition,直拳
+A02,arc,lateral,high,middle,head_torso,derived_from_action_definition,勾拳
+A03,sequence,front,middle_high,middle,head_torso,derived_from_action_definition,组合拳
+A04,arc,spin,high,middle,head_torso,derived_from_action_definition,摆拳
+A05,linear,front,middle,long,torso_limbs,derived_from_action_definition,前踢
+A06,linear,lateral,middle,long,torso_limbs,derived_from_action_definition,侧踢
+A07,spin,spin,high,long,head_torso,derived_from_action_definition,回旋踢
+A08,arc,low,low,long,lower_limbs,derived_from_action_definition,低扫腿
+A09,linear,front,middle,close,torso,derived_from_action_definition,膝撞
+A10,sequence,front_lateral,mixed,middle,all,derived_from_action_definition,拳腿组合
+A11,sequence,front,middle,long,torso_limbs,derived_from_action_definition,五连踢
+A12,rush,front,middle,close,torso,derived_from_action_definition,冲撞
+A13,recovery,mixed,middle,close,torso_limbs,derived_from_action_definition,倒地反击
