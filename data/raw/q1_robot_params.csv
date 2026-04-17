@@ -1,0 +1,11 @@
+param_name,value,unit,source_type,description
+total_height_m,1.4,m,official,机器人总高度
+total_mass_kg,42,kg,official,含电池总质量
+leg_length_m,0.6865,m,official,小腿加大腿总长
+arm_span_m,1.44,m,official,双臂臂展
+max_joint_torque_nm,145,Nm,official,Q90H最大力矩
+max_motor_speed_rpm,6400,rpm,official,Q90H最高转速
+reducer_ratio,25,ratio,official,Q90H减速比
+joint_mass_kg,1.1,kg,official,单关节质量
+joint_count,23,count,official,关节总数
+body_width_m,0.53555,m,official,机器人宽度
