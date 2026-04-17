@@ -1,7 +1,7 @@
 # MathorCup 2026 B题：机器人竞技策略优化
 
 ## 项目简介
-本仓库用于 MathorCup 2026 B题的建模协作与代码整理。项目围绕机器人竞技策略优化展开，主线覆盖 Q1 到 Q5：攻击动作评价、 防守动作匹配、单场策略优化、BO3 资源决策，以及最终建议书整理。
+本仓库用于 MathorCup 2026 B题的建模协作与代码整理。项目围绕机器人竞技策略优化展开，主线覆盖 Q1 到 Q5：攻击动作评价、防守动作匹配、单场策略优化、BO3 资源决策，以及最终建议书整理。
 
 题目核心对象包括 13 种攻击动作、22 种防守动作，以及 BO3 赛制下人工复位、战术暂停、紧急维修等资源约束。
 
@@ -14,36 +14,62 @@
 ## 项目结构
 ```text
 MathorCup2026-B-Robot-Strategy/
-├─ README.md
-├─ requirements.txt
-├─ .gitignore
+├─ README.md                 # 项目说明、协作约定、运行指引
+├─ requirements.txt          # 轻量依赖列表，比赛环境安装入口
+├─ .gitignore                # Git 忽略规则（已存在，不改动）
 ├─ data/
-│  ├─ raw/
-│  ├─ interim/
-│  └─ output/
+│  ├─ raw/                   # 原始题目、动作描述、手工整理表、外部资料
+│  ├─ interim/               # 中间结果，如 Q1/Q2 输出给 Q3/Q4 的接口文件
+│  └─ output/                # 最终图表、结果表、导出文件
 ├─ docs/
-│  ├─ notes.md
-│  └─ paper_outline.md
+│  ├─ notes.md               # 建模思路、讨论记录、会议纪要、分工备注
+│  └─ paper_outline.md       # 论文提纲、写作结构、章节安排
 ├─ debug/
-│  ├─ q1_debug.py
-│  ├─ q2_debug.py
-│  ├─ q3_debug.py
-│  └─ q4_debug.py
+│  ├─ q1_debug.py            # Q1 局部调试入口
+│  ├─ q2_debug.py            # Q2 局部调试入口
+│  ├─ q3_debug.py            # Q3 局部调试入口
+│  └─ q4_debug.py            # Q4 局部调试入口
 ├─ src/
-│  ├─ common.py
-│  ├─ io_utils.py
+│  ├─ common.py              # 通用常量、路径配置、基础工具函数
+│  ├─ io_utils.py            # 数据读写、路径解析、文件接口辅助函数
 │  ├─ q1/
+│  │  ├─ model_v1.py         # Q1 模型主体占位，后续放攻击动作评价模型
+│  │  ├─ evaluate.py         # Q1 指标计算与评价逻辑
+│  │  ├─ plot.py             # Q1 图表输出
+│  │  └─ pipeline.py         # Q1 流水线入口，串联建模过程
 │  ├─ q2/
+│  │  ├─ model_v1.py         # Q2 模型主体占位，后续放防守匹配模型
+│  │  ├─ evaluate.py         # Q2 攻防匹配评价逻辑
+│  │  ├─ plot.py             # Q2 图表输出
+│  │  └─ pipeline.py         # Q2 流水线入口
 │  ├─ q3/
+│  │  ├─ model_v1.py         # Q3 单场策略优化模型
+│  │  ├─ policy.py           # Q3 策略生成与策略表示
+│  │  ├─ simulate.py         # Q3 单场仿真与对比
+│  │  ├─ plot.py             # Q3 图表输出
+│  │  └─ pipeline.py         # Q3 流水线入口
 │  ├─ q4/
+│  │  ├─ model_v1.py         # Q4 BO3 资源决策模型
+│  │  ├─ decision.py         # Q4 资源分配与决策逻辑
+│  │  ├─ simulate.py         # Q4 BO3 仿真与情景分析
+│  │  ├─ plot.py             # Q4 图表输出
+│  │  └─ pipeline.py         # Q4 流水线入口
 │  └─ q5/
+│     └─ summary.py          # Q5 建议书整理、结论汇总、论文材料收口
 └─ scripts/
-   ├─ run_q1.py
-   ├─ run_q2.py
-   ├─ run_q3.py
-   ├─ run_q4.py
-   └─ run_all.py
+   ├─ run_q1.py              # 命令行运行 Q1
+   ├─ run_q2.py              # 命令行运行 Q2
+   ├─ run_q3.py              # 命令行运行 Q3
+   ├─ run_q4.py              # 命令行运行 Q4
+   └─ run_all.py             # 顺序运行 Q1~Q4 的统一入口
 ```
+
+结构使用建议：
+- `data/` 只放数据，不放分析代码。
+- `docs/` 只放文字材料，避免和代码混在一起。
+- `debug/` 适合快速验证单个问题的小实验，不作为正式主流程。
+- `src/` 放正式建模代码，按“题号 + 功能角色”组织，便于后续更换方法。
+- `scripts/` 面向比赛期快速运行，适合统一入口和批量执行。
 
 ## 建模主线
 - Q1：攻击动作评价。整理 13 种攻击动作的效用、得分潜力、风险与代价。
