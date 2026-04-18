@@ -76,7 +76,11 @@ def plot_policy_heatmap(policy_table: pd.DataFrame, output_path: str | Path) -> 
     """绘制最优策略分布矩阵。"""
 
     zh_font, _ = configure_fonts()
-    policy_table = policy_table[policy_table["recovery_lock"] == 0].copy()
+    policy_table = policy_table[
+        (policy_table["recovery_lock"] == 0)
+        & (policy_table["counter_ready"] == 0)
+        & (policy_table["health_opp"] == 2)
+    ].copy()
     figure, axes = plt.subplots(4, 3, figsize=(10.4, 8.0), sharex=True, sharey=True)
     cmap = LinearSegmentedColormap.from_list(
         "q3_policy",
@@ -130,7 +134,7 @@ def plot_policy_heatmap(policy_table: pd.DataFrame, output_path: str | Path) -> 
     colorbar = figure.colorbar(last_image, cax=cax)
     colorbar.set_label("占比", fontproperties=zh_font, fontsize=LABEL_SIZE - 1)
     colorbar.ax.tick_params(labelsize=TICK_SIZE - 1)
-    figure.suptitle("Q3 最优策略分布矩阵", fontproperties=zh_font, fontsize=TITLE_SIZE - 1, y=0.980)
+    figure.suptitle("Q3 最优策略分布矩阵（对手 High）", fontproperties=zh_font, fontsize=TITLE_SIZE - 1, y=0.975)
     figure.supxlabel("分差", fontproperties=zh_font, fontsize=LABEL_SIZE, y=0.040)
     figure.supylabel("宏观动作类", fontproperties=zh_font, fontsize=LABEL_SIZE, x=0.035)
 
@@ -141,6 +145,54 @@ def plot_policy_heatmap(policy_table: pd.DataFrame, output_path: str | Path) -> 
     return output
 
 
+def _compress_action_segments(trajectory_table: pd.DataFrame) -> pd.DataFrame:
+    """将连续相同动作压缩为单个区段，便于轨迹图展示。"""
+
+    if trajectory_table.empty:
+        return pd.DataFrame()
+
+    segments: list[dict[str, object]] = []
+    for method, subset in trajectory_table.sort_values("time_step").groupby("method"):
+        current_segment: dict[str, object] | None = None
+        for row in subset.to_dict("records"):
+            time_step = int(row["time_step"])
+            action_id = str(row["action_id"])
+            macro_group = str(row["macro_group"])
+            if (
+                current_segment is not None
+                and action_id == current_segment["action_id"]
+                and macro_group == current_segment["macro_group"]
+                and time_step == int(current_segment["end_step"]) + 1
+            ):
+                current_segment["end_step"] = time_step
+                current_segment["length"] = int(current_segment["length"]) + 1
+                continue
+
+            if current_segment is not None:
+                segments.append(current_segment)
+            current_segment = {
+                "method": method,
+                "action_id": action_id,
+                "macro_group": macro_group,
+                "start_step": time_step,
+                "end_step": time_step,
+                "length": 1,
+            }
+        if current_segment is not None:
+            segments.append(current_segment)
+
+    segment_table = pd.DataFrame(segments)
+    if segment_table.empty:
+        return segment_table
+    segment_table["label"] = segment_table.apply(
+        lambda row: f"{row['action_id']}×{int(row['length'])}" if int(row["length"]) > 1 else str(row["action_id"]),
+        axis=1,
+    )
+    segment_table["x_center"] = (segment_table["start_step"] + segment_table["end_step"]) / 2.0
+    segment_table["width"] = segment_table["end_step"] - segment_table["start_step"] + 0.90
+    return segment_table
+
+
 def plot_value_surface(policy_table: pd.DataFrame, output_path: str | Path) -> Path:
     """绘制值函数二维填色等高图。"""
 
@@ -149,6 +201,7 @@ def plot_value_surface(policy_table: pd.DataFrame, output_path: str | Path) -> P
         (policy_table["health_my"] == 2)
         & (policy_table["health_opp"] == 2)
         & (policy_table["recovery_lock"] == 0)
+        & (policy_table["counter_ready"] == 0)
     ].copy()
     pivot = subset.pivot(index="score_diff", columns="time_step", values="mdp_value").sort_index()
     x_values = pivot.columns.to_numpy(dtype=float)
@@ -212,19 +265,21 @@ def plot_method_comparison(metrics_table: pd.DataFrame, output_path: str | Path)
     """绘制四方法胜率对比图。"""
 
     zh_font, _ = configure_fonts()
-    figure, ax = plt.subplots(figsize=(7.2, 4.6))
+    figure, ax = plt.subplots(figsize=(7.0, 4.2))
     methods = ["greedy", "static", "rule", "mdp"]
     bar_width = 0.18
     x_centers = np.arange(len(SCENARIO_ORDER), dtype=float)
     offsets = np.linspace(-1.5 * bar_width, 1.5 * bar_width, len(methods))
     legend_handles: list[object] = []
     legend_labels: list[str] = []
+    upper_bound = 1.0
 
     for offset, method in zip(offsets, methods, strict=True):
         subset = metrics_table[metrics_table["method"] == method].set_index("scenario").reindex(SCENARIO_ORDER)
         heights = subset["win_rate"].to_numpy(dtype=float)
         ci_low = subset["ci_low"].to_numpy(dtype=float)
         ci_high = subset["ci_high"].to_numpy(dtype=float)
+        upper_bound = max(upper_bound, float(np.nanmax(ci_high)))
         yerr = np.vstack([heights - ci_low, ci_high - heights])
         bars = ax.bar(
             x_centers + offset,
@@ -249,39 +304,47 @@ def plot_method_comparison(metrics_table: pd.DataFrame, output_path: str | Path)
             zorder=4,
         )
         for bar, height, upper in zip(bars, heights, ci_high, strict=True):
+            label_x = bar.get_x() + bar.get_width() / 2.0
+            if height >= 0.88:
+                label_y = max(height - 0.05, 0.03)
+                label_color = "white"
+                va = "top"
+            else:
+                label_y = upper + 0.012
+                label_color = "#111827"
+                va = "bottom"
             ax.text(
-                bar.get_x() + bar.get_width() / 2.0,
-                upper + 0.008,
+                label_x,
+                label_y,
                 f"{height:.2f}",
                 ha="center",
-                va="bottom",
+                va=va,
                 fontsize=TEXT_SIZE,
-                bbox={
-                    "facecolor": "white",
-                    "edgecolor": "none",
-                    "alpha": 0.90,
-                    "pad": 0.15,
-                },
+                color=label_color,
+                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.65, "pad": 0.10}
+                if label_color != "white"
+                else None,
                 zorder=5,
             )
 
     ax.set_xticks(x_centers)
     ax.set_xticklabels(SCENARIO_ORDER, fontproperties=zh_font, fontsize=LABEL_SIZE + 1)
     ax.set_ylabel("胜率", fontproperties=zh_font, fontsize=LABEL_SIZE + 1)
-    ax.set_ylim(0.0, 1.08)
+    ax.set_ylim(0.0, min(1.18, upper_bound + 0.10))
     ax.set_title("Q3 四方法胜率对比", fontproperties=zh_font, fontsize=TITLE_SIZE + 1, pad=8)
     _set_axis_style(ax)
-    ax.legend(
+    figure.legend(
         legend_handles,
         legend_labels,
-        loc="upper right",
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.985),
         frameon=False,
-        ncol=2,
+        ncol=4,
         prop=zh_font,
     )
 
     output = Path(output_path)
-    figure.subplots_adjust(left=0.10, right=0.98, bottom=0.10, top=0.90)
+    figure.subplots_adjust(left=0.10, right=0.98, bottom=0.11, top=0.82)
     figure.savefig(output, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
     plt.close(figure)
     return output
@@ -292,10 +355,19 @@ def plot_trajectory_comparison(trajectory_table: pd.DataFrame, output_path: str 
 
     zh_font, _ = configure_fonts()
     methods = ["greedy", "mdp"]
-    figure = plt.figure(figsize=(7.4, 5.5))
-    grid = figure.add_gridspec(2, 1, height_ratios=[2.0, 0.84], hspace=0.14)
+    figure = plt.figure(figsize=(7.1, 4.9))
+    grid = figure.add_gridspec(2, 1, height_ratios=[2.15, 0.62], hspace=0.08)
     ax_top = figure.add_subplot(grid[0, 0])
     ax_bottom = figure.add_subplot(grid[1, 0])
+    if trajectory_table.empty:
+        output = Path(output_path)
+        figure.savefig(output, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
+        plt.close(figure)
+        return output
+
+    scenario_name = str(trajectory_table["scenario"].iloc[0])
+    sample_seed = int(trajectory_table["match_seed"].iloc[0])
+    segment_table = _compress_action_segments(trajectory_table)
 
     for method in methods:
         subset = trajectory_table[trajectory_table["method"] == method].copy()
@@ -307,47 +379,55 @@ def plot_trajectory_comparison(trajectory_table: pd.DataFrame, output_path: str 
             where="post",
             linewidth=2.3,
             color=METHOD_COLORS[method],
+            linestyle="--" if method == "greedy" else "-",
             label=METHOD_LABELS[method],
         )
         ax_top.plot(
             subset["time_step"],
             subset["score_diff_after"],
-            marker="o",
+            marker="s" if method == "greedy" else "o",
             markersize=4.2,
             linestyle="none",
             color=METHOD_COLORS[method],
+            markerfacecolor="white" if method == "greedy" else METHOD_COLORS[method],
+            markeredgewidth=1.0,
         )
 
     ax_top.axhline(0.0, color="#A0AEC0", linewidth=0.9, linestyle="--")
     ax_top.set_xlim(0.35, max(float(trajectory_table["time_step"].max()), 1.0) + 0.35)
     ax_top.set_ylabel("分差", fontproperties=zh_font, fontsize=LABEL_SIZE + 1)
-    ax_top.set_title("Q3 轨迹对比：MDP vs 贪心", fontproperties=zh_font, fontsize=TITLE_SIZE + 1, pad=6)
+    ax_top.set_title(
+        f"Q3 轨迹对比：MDP vs 贪心（{scenario_name}，种子 {sample_seed}）",
+        fontproperties=zh_font,
+        fontsize=TITLE_SIZE,
+        pad=6,
+    )
     _set_axis_style(ax_top)
     ax_top.legend(frameon=False, fontsize=TEXT_SIZE + 1, loc="upper left", prop=zh_font)
 
     y_positions = {"mdp": 1.0, "greedy": 0.0}
     for method in methods:
-        subset = trajectory_table[trajectory_table["method"] == method].copy()
+        subset = segment_table[segment_table["method"] == method].copy()
         if subset.empty:
             continue
         y_level = y_positions[method]
         for _, row in subset.iterrows():
             rect = Rectangle(
-                (float(row["time_step"]) - 0.40, y_level - 0.14),
-                0.80,
-                0.28,
+                (float(row["x_center"]) - float(row["width"]) / 2.0, y_level - 0.15),
+                float(row["width"]),
+                0.30,
                 facecolor=MACRO_COLORS.get(str(row["macro_group"]), "#CBD5E0"),
                 edgecolor="#1A202C",
                 linewidth=0.45,
             )
             ax_bottom.add_patch(rect)
             ax_bottom.text(
-                float(row["time_step"]),
+                float(row["x_center"]),
                 y_level,
-                str(row["action_id"]),
+                str(row["label"]),
                 ha="center",
                 va="center",
-                fontsize=SMALL_TEXT_SIZE + 0.5,
+                fontsize=SMALL_TEXT_SIZE + 1,
                 color="white" if row["macro_group"] in {"激进攻击", "反击防守", "平衡恢复"} else "#111827",
                 weight="bold",
                 clip_on=False,
@@ -357,8 +437,8 @@ def plot_trajectory_comparison(trajectory_table: pd.DataFrame, output_path: str 
     ax_bottom.set_ylim(-0.42, 1.42)
     ax_bottom.set_yticks([0.0, 1.0])
     ax_bottom.set_yticklabels(["贪心", "MDP"], fontproperties=zh_font, fontsize=LABEL_SIZE)
-    ax_bottom.set_xlabel("时间步", fontproperties=zh_font, fontsize=LABEL_SIZE + 1)
     _set_axis_style(ax_bottom)
+    figure.supxlabel("时间步", fontproperties=zh_font, fontsize=LABEL_SIZE + 1, y=0.070)
 
     legend_handles = [
         Line2D([0], [0], color=color, lw=6, label=label)
@@ -368,14 +448,14 @@ def plot_trajectory_comparison(trajectory_table: pd.DataFrame, output_path: str 
         legend_handles,
         [item.get_label() for item in legend_handles],
         loc="lower center",
-        bbox_to_anchor=(0.5, -0.002),
+        bbox_to_anchor=(0.5, 0.010),
         frameon=False,
         ncol=5,
         prop=zh_font,
     )
 
     output = Path(output_path)
-    figure.subplots_adjust(left=0.10, right=0.98, bottom=0.15, top=0.92, hspace=0.14)
+    figure.subplots_adjust(left=0.10, right=0.98, bottom=0.18, top=0.91, hspace=0.08)
     figure.savefig(output, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
     plt.close(figure)
     return output

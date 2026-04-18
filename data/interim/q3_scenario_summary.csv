@@ -1,5 +1,6 @@
 ﻿scenario,action_id,action_name,macro_group,count,share,top5_total_count
-领先局,A01,straight_punch,试探攻击,180,1.0,180
-落后局,A01,straight_punch,试探攻击,123,0.6833333333333333,180
-落后局,D08,back_step,反击防守,57,0.31666666666666665,180
+领先局,A01,straight_punch,试探攻击,114,0.6333333333333333,180
+领先局,D08,back_step,反击防守,66,0.36666666666666664,180
+落后局,D08,back_step,反击防守,111,0.6166666666666667,180
+落后局,A01,straight_punch,试探攻击,69,0.38333333333333336,180
 平局局,A01,straight_punch,试探攻击,45,1.0,45

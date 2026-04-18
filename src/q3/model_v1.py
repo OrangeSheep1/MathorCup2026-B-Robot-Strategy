@@ -13,6 +13,7 @@ import pandas as pd
 SCORE_DIFF_VALUES = tuple(range(-5, 6))
 HEALTH_LEVELS = (0, 1, 2)
 RECOVERY_FLAGS = (0, 1)
+COUNTER_READY_FLAGS = (0, 1)
 HEALTH_LABELS = {
     0: "Low",
     1: "Mid",
@@ -21,6 +22,10 @@ HEALTH_LABELS = {
 RECOVERY_LABELS = {
     0: "Normal",
     1: "Recover",
+}
+COUNTER_READY_LABELS = {
+    0: "Normal",
+    1: "CounterReady",
 }
 TIME_PHASE_LABELS = {
     "early": "前期",
@@ -48,6 +53,10 @@ Q3_ASSUMPTIONS = {
     "terminal_reward_loss": -10.0,
     "low_health_energy_cutoff": 0.50,
     "fall_recovery_lock_steps": 1,
+    "counter_ready_trigger_prob": 0.15,
+    "counter_ready_bonus_other": 0.02,
+    "counter_ready_bonus_min": 0.08,
+    "counter_ready_bonus_max": 0.16,
 }
 TIME_STEP_CARD = int(Q3_ASSUMPTIONS["match_time_s"] // Q3_ASSUMPTIONS["time_step_s"])
 
@@ -70,6 +79,10 @@ ASSUMPTION_NOTES = {
     "terminal_reward_loss": "终局失败惩罚与获胜奖励对称。",
     "low_health_energy_cutoff": "Low 机能状态下仅保留能耗归一值低于 0.5 的攻击动作。",
     "fall_recovery_lock_steps": "倒地后下一决策步强制进入恢复约束，以体现倒地的后续状态影响。",
+    "counter_ready_trigger_prob": "当防守动作的有效反击概率超过阈值且未被对手得分时，下一步进入反击准备态。",
+    "counter_ready_bonus_other": "非典型反击动作在反击准备态下获得的小幅命中增益。",
+    "counter_ready_bonus_min": "被攻防数据识别为反击适配动作的最小命中增益。",
+    "counter_ready_bonus_max": "反击适配度最高动作在反击准备态下的最大命中增益。",
 }
 
 REQUIRED_ACTION_COLUMNS = [
@@ -152,6 +165,7 @@ class MatchState:
     health_my: int
     health_opp: int
     recovery_lock: int = 0
+    counter_ready: int = 0
 
 
 @dataclass(frozen=True)
@@ -181,6 +195,10 @@ class Q3Config:
     terminal_reward_loss: float
     low_health_energy_cutoff: float
     fall_recovery_lock_steps: int
+    counter_ready_trigger_prob: float
+    counter_ready_bonus_other: float
+    counter_ready_bonus_min: float
+    counter_ready_bonus_max: float
 
 
 @dataclass(frozen=True)
@@ -201,6 +219,7 @@ class ActionKernel:
     p_fall: float
     preferred_counter_action: str
     preferred_counter_name: str
+    counter_ready_bonus: float
 
 
 @dataclass
@@ -216,7 +235,7 @@ class Q3Environment:
     state_table: pd.DataFrame
     kernel_table: pd.DataFrame
     pair_lookup: pd.DataFrame
-    kernel_lookup: dict[tuple[int, int, str], ActionKernel]
+    kernel_lookup: dict[tuple[int, int, int, str], ActionKernel]
     action_index_map: dict[str, int]
     attack_ids_by_health: dict[int, tuple[str, ...]]
     defense_ids: tuple[str, ...]
@@ -263,27 +282,31 @@ def load_defense_pair_scores(file_path: str | Path) -> pd.DataFrame:
     return data.copy()
 
 
-def build_q3_config() -> Q3Config:
+def build_q3_config(overrides: dict[str, float] | None = None) -> Q3Config:
     """构建 Q3 有限时域 MDP 配置。"""
 
-    match_time_s = int(Q3_ASSUMPTIONS["match_time_s"])
-    time_step_s = int(Q3_ASSUMPTIONS["time_step_s"])
+    assumptions = dict(Q3_ASSUMPTIONS)
+    if overrides:
+        assumptions.update(overrides)
+
+    match_time_s = int(assumptions["match_time_s"])
+    time_step_s = int(assumptions["time_step_s"])
     n_time_steps = match_time_s // time_step_s
-    battery_capacity_mah = float(Q3_ASSUMPTIONS["battery_capacity_mah"])
-    battery_voltage_v = float(Q3_ASSUMPTIONS["battery_charge_voltage_v"])
-    battery_endurance_h = float(Q3_ASSUMPTIONS["battery_endurance_h"])
+    battery_capacity_mah = float(assumptions["battery_capacity_mah"])
+    battery_voltage_v = float(assumptions["battery_charge_voltage_v"])
+    battery_endurance_h = float(assumptions["battery_endurance_h"])
     battery_energy_wh = battery_capacity_mah / 1000.0 * battery_voltage_v
     battery_energy_j = battery_energy_wh * 3600.0
     available_match_energy_j = battery_energy_j * (match_time_s / (battery_endurance_h * 3600.0))
-    high_health_threshold_j = available_match_energy_j * float(Q3_ASSUMPTIONS["mid_health_ratio"])
-    low_health_threshold_j = available_match_energy_j * float(Q3_ASSUMPTIONS["low_health_ratio"])
+    high_health_threshold_j = available_match_energy_j * float(assumptions["mid_health_ratio"])
+    low_health_threshold_j = available_match_energy_j * float(assumptions["low_health_ratio"])
     mid_health_gap_j = low_health_threshold_j - high_health_threshold_j
 
     return Q3Config(
         match_time_s=match_time_s,
         time_step_s=time_step_s,
         n_time_steps=n_time_steps,
-        gamma=float(Q3_ASSUMPTIONS["discount_factor"]),
+        gamma=float(assumptions["discount_factor"]),
         battery_capacity_mah=battery_capacity_mah,
         battery_voltage_v=battery_voltage_v,
         battery_endurance_h=battery_endurance_h,
@@ -293,16 +316,20 @@ def build_q3_config() -> Q3Config:
         high_health_threshold_j=high_health_threshold_j,
         mid_health_gap_j=mid_health_gap_j,
         low_health_threshold_j=low_health_threshold_j,
-        energy_unit_required=str(Q3_ASSUMPTIONS["energy_unit_required"]),
-        impact_to_health_factor=float(Q3_ASSUMPTIONS["impact_to_health_factor"]),
-        reward_score=float(Q3_ASSUMPTIONS["reward_score"]),
-        reward_health=float(Q3_ASSUMPTIONS["reward_health"]),
-        reward_cost=float(Q3_ASSUMPTIONS["reward_cost"]),
-        reward_fall=float(Q3_ASSUMPTIONS["reward_fall"]),
-        terminal_reward_win=float(Q3_ASSUMPTIONS["terminal_reward_win"]),
-        terminal_reward_loss=float(Q3_ASSUMPTIONS["terminal_reward_loss"]),
-        low_health_energy_cutoff=float(Q3_ASSUMPTIONS["low_health_energy_cutoff"]),
-        fall_recovery_lock_steps=int(Q3_ASSUMPTIONS["fall_recovery_lock_steps"]),
+        energy_unit_required=str(assumptions["energy_unit_required"]),
+        impact_to_health_factor=float(assumptions["impact_to_health_factor"]),
+        reward_score=float(assumptions["reward_score"]),
+        reward_health=float(assumptions["reward_health"]),
+        reward_cost=float(assumptions["reward_cost"]),
+        reward_fall=float(assumptions["reward_fall"]),
+        terminal_reward_win=float(assumptions["terminal_reward_win"]),
+        terminal_reward_loss=float(assumptions["terminal_reward_loss"]),
+        low_health_energy_cutoff=float(assumptions["low_health_energy_cutoff"]),
+        fall_recovery_lock_steps=int(assumptions["fall_recovery_lock_steps"]),
+        counter_ready_trigger_prob=float(assumptions["counter_ready_trigger_prob"]),
+        counter_ready_bonus_other=float(assumptions["counter_ready_bonus_other"]),
+        counter_ready_bonus_min=float(assumptions["counter_ready_bonus_min"]),
+        counter_ready_bonus_max=float(assumptions["counter_ready_bonus_max"]),
     )
 
 
@@ -312,34 +339,40 @@ def encode_state(state: MatchState) -> int:
     score_index = state.score_diff - SCORE_DIFF_VALUES[0]
     time_index = state.time_step - 1
     return (
-        score_index * (TIME_STEP_CARD * len(HEALTH_LEVELS) * len(HEALTH_LEVELS) * len(RECOVERY_FLAGS))
-        + time_index * (len(HEALTH_LEVELS) * len(HEALTH_LEVELS) * len(RECOVERY_FLAGS))
-        + state.health_my * len(HEALTH_LEVELS) * len(RECOVERY_FLAGS)
-        + state.health_opp * len(RECOVERY_FLAGS)
-        + state.recovery_lock
+        score_index
+        * (TIME_STEP_CARD * len(HEALTH_LEVELS) * len(HEALTH_LEVELS) * len(RECOVERY_FLAGS) * len(COUNTER_READY_FLAGS))
+        + time_index * (len(HEALTH_LEVELS) * len(HEALTH_LEVELS) * len(RECOVERY_FLAGS) * len(COUNTER_READY_FLAGS))
+        + state.health_my * len(HEALTH_LEVELS) * len(RECOVERY_FLAGS) * len(COUNTER_READY_FLAGS)
+        + state.health_opp * len(RECOVERY_FLAGS) * len(COUNTER_READY_FLAGS)
+        + state.recovery_lock * len(COUNTER_READY_FLAGS)
+        + state.counter_ready
     )
 
 
 def decode_state(state_index: int) -> MatchState:
     """将一维索引还原为五维状态。"""
 
+    counter_ready_card = len(COUNTER_READY_FLAGS)
     recovery_card = len(RECOVERY_FLAGS)
     health_card = len(HEALTH_LEVELS)
-    score_block = TIME_STEP_CARD * health_card * health_card * recovery_card
+    score_block = TIME_STEP_CARD * health_card * health_card * recovery_card * counter_ready_card
     score_index = state_index // score_block
     remain = state_index % score_block
-    time_index = remain // (health_card * health_card * recovery_card)
-    remain = remain % (health_card * health_card * recovery_card)
-    health_my = remain // (health_card * recovery_card)
-    remain = remain % (health_card * recovery_card)
-    health_opp = remain // recovery_card
-    recovery_lock = remain % recovery_card
+    time_index = remain // (health_card * health_card * recovery_card * counter_ready_card)
+    remain = remain % (health_card * health_card * recovery_card * counter_ready_card)
+    health_my = remain // (health_card * recovery_card * counter_ready_card)
+    remain = remain % (health_card * recovery_card * counter_ready_card)
+    health_opp = remain // (recovery_card * counter_ready_card)
+    remain = remain % (recovery_card * counter_ready_card)
+    recovery_lock = remain // counter_ready_card
+    counter_ready = remain % counter_ready_card
     return MatchState(
         score_diff=SCORE_DIFF_VALUES[0] + score_index,
         time_step=time_index + 1,
         health_my=int(health_my),
         health_opp=int(health_opp),
         recovery_lock=int(recovery_lock),
+        counter_ready=int(counter_ready),
     )
 
 
@@ -360,22 +393,25 @@ def build_state_table(config: Q3Config) -> pd.DataFrame:
             for health_my in HEALTH_LEVELS:
                 for health_opp in HEALTH_LEVELS:
                     for recovery_lock in RECOVERY_FLAGS:
-                        state = MatchState(score_diff, time_step, health_my, health_opp, recovery_lock)
-                        records.append(
-                            {
-                                "state_index": encode_state(state),
-                                "score_diff": score_diff,
-                                "time_step": time_step,
-                                "time_phase": time_phase,
-                                "time_phase_name": TIME_PHASE_LABELS[time_phase],
-                                "health_my": health_my,
-                                "health_my_name": HEALTH_LABELS[health_my],
-                                "health_opp": health_opp,
-                                "health_opp_name": HEALTH_LABELS[health_opp],
-                                "recovery_lock": recovery_lock,
-                                "recovery_name": RECOVERY_LABELS[recovery_lock],
-                            }
-                        )
+                        for counter_ready in COUNTER_READY_FLAGS:
+                            state = MatchState(score_diff, time_step, health_my, health_opp, recovery_lock, counter_ready)
+                            records.append(
+                                {
+                                    "state_index": encode_state(state),
+                                    "score_diff": score_diff,
+                                    "time_step": time_step,
+                                    "time_phase": time_phase,
+                                    "time_phase_name": TIME_PHASE_LABELS[time_phase],
+                                    "health_my": health_my,
+                                    "health_my_name": HEALTH_LABELS[health_my],
+                                    "health_opp": health_opp,
+                                    "health_opp_name": HEALTH_LABELS[health_opp],
+                                    "recovery_lock": recovery_lock,
+                                    "recovery_name": RECOVERY_LABELS[recovery_lock],
+                                    "counter_ready": counter_ready,
+                                    "counter_ready_name": COUNTER_READY_LABELS[counter_ready],
+                                }
+                            )
     return pd.DataFrame(records)
 
 
@@ -554,6 +590,42 @@ def build_pair_table(pair_scores: pd.DataFrame, attack_table: pd.DataFrame) -> p
     return pair_table
 
 
+def build_counter_attack_profile(pair_table: pd.DataFrame, attack_table: pd.DataFrame, config: Q3Config) -> pd.DataFrame:
+    """根据 Q2 的反击链结果识别更适合作为反击动作的攻击。"""
+
+    counter_candidates = pair_table[pair_table["counter_action_id"].astype(str).str.len() > 0].copy()
+    if counter_candidates.empty:
+        profile = attack_table[["action_id"]].copy()
+        profile["counter_role_score"] = 0.0
+        profile["counter_ready_bonus"] = config.counter_ready_bonus_other
+        profile["counter_attack_eligible"] = False
+        return profile
+
+    counter_summary = (
+        counter_candidates.groupby("counter_action_id", as_index=False)
+        .agg(
+            counter_support_count=("counter_action_id", "size"),
+            counter_prob_mean=("counter_prob_effective", "mean"),
+            counter_window_mean=("counter_window", "mean"),
+        )
+        .rename(columns={"counter_action_id": "action_id"})
+    )
+    profile = attack_table[["action_id", "exec_time"]].copy().merge(counter_summary, on="action_id", how="left")
+    profile["counter_support_count"] = profile["counter_support_count"].fillna(0.0)
+    profile["counter_prob_mean"] = profile["counter_prob_mean"].fillna(0.0)
+    profile["counter_window_mean"] = profile["counter_window_mean"].fillna(0.0)
+    profile["counter_role_raw"] = profile["counter_support_count"] * (profile["counter_prob_mean"] + 1e-6)
+    profile["counter_role_score"] = _normalize_series(profile["counter_role_raw"]).clip(0.0, 1.0)
+    profile["counter_attack_eligible"] = profile["counter_support_count"] > 0.0
+    profile["counter_ready_bonus"] = np.where(
+        profile["counter_attack_eligible"],
+        config.counter_ready_bonus_min
+        + profile["counter_role_score"] * (config.counter_ready_bonus_max - config.counter_ready_bonus_min),
+        config.counter_ready_bonus_other,
+    )
+    return profile[["action_id", "counter_role_score", "counter_ready_bonus", "counter_attack_eligible"]]
+
+
 def build_attack_response_profile(defense_matchup: pd.DataFrame) -> pd.DataFrame:
     """根据 Q2 的 Top3 防守集构建攻击响应画像。"""
 
@@ -709,7 +781,12 @@ def available_attack_ids(attack_table: pd.DataFrame, health_level: int, config: 
     return tuple(subset.sort_values("action_id")["action_id"].tolist())
 
 
-def available_action_ids(env: Q3Environment, health_level: int, recovery_lock: int = 0) -> tuple[str, ...]:
+def available_action_ids(
+    env: Q3Environment,
+    health_level: int,
+    recovery_lock: int = 0,
+    counter_ready: int = 0,
+) -> tuple[str, ...]:
     """返回给定状态下的可用动作。"""
 
     if recovery_lock > 0:
@@ -732,6 +809,7 @@ def _build_attack_kernel(
     attack_row: pd.Series,
     health_my: int,
     health_opp: int,
+    counter_ready: int,
     config: Q3Config,
 ) -> ActionKernel:
     """构建攻击动作在给定机能状态下的一步核。"""
@@ -739,6 +817,10 @@ def _build_attack_kernel(
     opponent_block_rate = float(attack_row.get("opponent_block_rate", attack_row["avg_block_rate"]))
     p_score_for = float(attack_row["score_prob"]) * (1.0 - opponent_block_rate)
     p_score_against = float(attack_row.get("opponent_counter_prob", 0.0))
+    counter_ready_bonus = 0.0
+    if counter_ready > 0:
+        counter_ready_bonus = float(attack_row.get("counter_ready_bonus", config.counter_ready_bonus_other))
+        p_score_for = p_score_for * (1.0 + counter_ready_bonus)
     total_score_prob = p_score_for + p_score_against
     if total_score_prob > 1.0:
         p_score_for = p_score_for / total_score_prob
@@ -771,6 +853,7 @@ def _build_attack_kernel(
         p_fall=float(np.clip(p_fall, 0.0, 1.0)),
         preferred_counter_action="",
         preferred_counter_name="",
+        counter_ready_bonus=float(counter_ready_bonus),
     )
 
 
@@ -839,6 +922,7 @@ def _build_defense_kernel(
         p_fall=float(np.clip(p_fall, 0.0, 1.0)),
         preferred_counter_action=preferred_counter_action,
         preferred_counter_name=preferred_counter_name,
+        counter_ready_bonus=0.0,
     )
 
 
@@ -847,11 +931,11 @@ def build_kernel_table(
     defense_table: pd.DataFrame,
     pair_table: pd.DataFrame,
     config: Q3Config,
-) -> tuple[pd.DataFrame, dict[tuple[int, int, str], ActionKernel], dict[int, tuple[str, ...]]]:
+) -> tuple[pd.DataFrame, dict[tuple[int, int, int, str], ActionKernel], dict[int, tuple[str, ...]]]:
     """为全部机能状态预计算动作核。"""
 
     kernel_records: list[dict[str, object]] = []
-    kernel_lookup: dict[tuple[int, int, str], ActionKernel] = {}
+    kernel_lookup: dict[tuple[int, int, int, str], ActionKernel] = {}
     attack_ids_by_health = {
         health_level: available_attack_ids(attack_table, health_level, config)
         for health_level in HEALTH_LEVELS
@@ -861,62 +945,69 @@ def build_kernel_table(
         for health_opp in HEALTH_LEVELS:
             opponent_attack_ids = attack_ids_by_health[health_opp]
 
-            for _, attack_row in attack_table.iterrows():
-                if health_my <= 0 and not bool(attack_row["low_health_available"]):
-                    continue
-                kernel = _build_attack_kernel(attack_row, health_my, health_opp, config)
-                kernel_lookup[(health_my, health_opp, kernel.action_id)] = kernel
-                kernel_records.append(
-                    {
-                        "health_my": health_my,
-                        "health_my_name": HEALTH_LABELS[health_my],
-                        "health_opp": health_opp,
-                        "health_opp_name": HEALTH_LABELS[health_opp],
-                        "action_id": kernel.action_id,
-                        "action_name": kernel.action_name,
-                        "action_type": kernel.action_type,
-                        "macro_group": kernel.macro_group,
-                        "expected_reward": kernel.expected_reward,
-                        "p_score_for": kernel.p_score_for,
-                        "p_score_against": kernel.p_score_against,
-                        "p_self_drop": kernel.p_self_drop,
-                        "p_opp_drop": kernel.p_opp_drop,
-                        "p_fall": kernel.p_fall,
-                        "preferred_counter_action": kernel.preferred_counter_action,
-                        "preferred_counter_name": kernel.preferred_counter_name,
-                    }
-                )
+            for counter_ready in COUNTER_READY_FLAGS:
+                for _, attack_row in attack_table.iterrows():
+                    if health_my <= 0 and not bool(attack_row["low_health_available"]):
+                        continue
+                    kernel = _build_attack_kernel(attack_row, health_my, health_opp, counter_ready, config)
+                    kernel_lookup[(health_my, health_opp, counter_ready, kernel.action_id)] = kernel
+                    kernel_records.append(
+                        {
+                            "health_my": health_my,
+                            "health_my_name": HEALTH_LABELS[health_my],
+                            "health_opp": health_opp,
+                            "health_opp_name": HEALTH_LABELS[health_opp],
+                            "counter_ready": counter_ready,
+                            "counter_ready_name": COUNTER_READY_LABELS[counter_ready],
+                            "action_id": kernel.action_id,
+                            "action_name": kernel.action_name,
+                            "action_type": kernel.action_type,
+                            "macro_group": kernel.macro_group,
+                            "expected_reward": kernel.expected_reward,
+                            "p_score_for": kernel.p_score_for,
+                            "p_score_against": kernel.p_score_against,
+                            "p_self_drop": kernel.p_self_drop,
+                            "p_opp_drop": kernel.p_opp_drop,
+                            "p_fall": kernel.p_fall,
+                            "preferred_counter_action": kernel.preferred_counter_action,
+                            "preferred_counter_name": kernel.preferred_counter_name,
+                            "counter_ready_bonus": kernel.counter_ready_bonus,
+                        }
+                    )
 
-            for _, defense_row in defense_table.iterrows():
-                kernel = _build_defense_kernel(
-                    defense_row,
-                    pair_table,
-                    health_my,
-                    health_opp,
-                    config,
-                    opponent_attack_ids,
-                )
-                kernel_lookup[(health_my, health_opp, kernel.action_id)] = kernel
-                kernel_records.append(
-                    {
-                        "health_my": health_my,
-                        "health_my_name": HEALTH_LABELS[health_my],
-                        "health_opp": health_opp,
-                        "health_opp_name": HEALTH_LABELS[health_opp],
-                        "action_id": kernel.action_id,
-                        "action_name": kernel.action_name,
-                        "action_type": kernel.action_type,
-                        "macro_group": kernel.macro_group,
-                        "expected_reward": kernel.expected_reward,
-                        "p_score_for": kernel.p_score_for,
-                        "p_score_against": kernel.p_score_against,
-                        "p_self_drop": kernel.p_self_drop,
-                        "p_opp_drop": kernel.p_opp_drop,
-                        "p_fall": kernel.p_fall,
-                        "preferred_counter_action": kernel.preferred_counter_action,
-                        "preferred_counter_name": kernel.preferred_counter_name,
-                    }
-                )
+                for _, defense_row in defense_table.iterrows():
+                    kernel = _build_defense_kernel(
+                        defense_row,
+                        pair_table,
+                        health_my,
+                        health_opp,
+                        config,
+                        opponent_attack_ids,
+                    )
+                    kernel_lookup[(health_my, health_opp, counter_ready, kernel.action_id)] = kernel
+                    kernel_records.append(
+                        {
+                            "health_my": health_my,
+                            "health_my_name": HEALTH_LABELS[health_my],
+                            "health_opp": health_opp,
+                            "health_opp_name": HEALTH_LABELS[health_opp],
+                            "counter_ready": counter_ready,
+                            "counter_ready_name": COUNTER_READY_LABELS[counter_ready],
+                            "action_id": kernel.action_id,
+                            "action_name": kernel.action_name,
+                            "action_type": kernel.action_type,
+                            "macro_group": kernel.macro_group,
+                            "expected_reward": kernel.expected_reward,
+                            "p_score_for": kernel.p_score_for,
+                            "p_score_against": kernel.p_score_against,
+                            "p_self_drop": kernel.p_self_drop,
+                            "p_opp_drop": kernel.p_opp_drop,
+                            "p_fall": kernel.p_fall,
+                            "preferred_counter_action": kernel.preferred_counter_action,
+                            "preferred_counter_name": kernel.preferred_counter_name,
+                            "counter_ready_bonus": kernel.counter_ready_bonus,
+                        }
+                    )
 
     kernel_table = pd.DataFrame(kernel_records)
     return kernel_table, kernel_lookup, attack_ids_by_health
@@ -940,10 +1031,11 @@ def build_environment(
     defense_matchup_file: str | Path,
     defense_feature_file: str | Path,
     defense_pair_file: str | Path,
+    config_overrides: dict[str, float] | None = None,
 ) -> Q3Environment:
     """读取 Q1/Q2 输出并构建 Q3 环境对象。"""
 
-    config = build_q3_config()
+    config = build_q3_config(config_overrides)
     action_features = load_action_features(action_feature_file)
     defense_matchup = load_defense_matchup(defense_matchup_file)
     defense_features = load_defense_features(defense_feature_file)
@@ -951,12 +1043,17 @@ def build_environment(
 
     attack_table = build_attack_table(action_features, pair_scores, config)
     pair_table = build_pair_table(pair_scores, attack_table)
+    counter_profile = build_counter_attack_profile(pair_table, attack_table, config)
     attack_response = build_attack_response_profile(defense_matchup)
     attack_table = attack_table.merge(attack_response, on="action_id", how="left")
+    attack_table = attack_table.merge(counter_profile, on="action_id", how="left")
     attack_table["opponent_block_rate"] = attack_table["opponent_block_rate"].fillna(attack_table["avg_block_rate"])
     attack_table["opponent_counter_prob"] = attack_table["opponent_counter_prob"].fillna(0.0)
     attack_table["opponent_counter_window"] = attack_table["opponent_counter_window"].fillna(0.0)
     attack_table["opponent_defense_fall_risk"] = attack_table["opponent_defense_fall_risk"].fillna(0.0)
+    attack_table["counter_role_score"] = attack_table["counter_role_score"].fillna(0.0)
+    attack_table["counter_ready_bonus"] = attack_table["counter_ready_bonus"].fillna(config.counter_ready_bonus_other)
+    attack_table["counter_attack_eligible"] = attack_table["counter_attack_eligible"].fillna(False)
     attack_table["score_success_response"] = attack_table["score_prob"] * (1.0 - attack_table["opponent_block_rate"])
     attack_table["score_margin_response"] = attack_table["score_success_response"] - attack_table["opponent_counter_prob"]
     for rank in (1, 2, 3):
@@ -1044,7 +1141,24 @@ def _binary_flag_outcomes(event_prob: float) -> list[tuple[int, float]]:
     return [(0, 1.0 - probability), (1, probability)] if probability > 0.0 else [(0, 1.0)]
 
 
-def build_transition_events(state: MatchState, kernel: ActionKernel) -> list[dict[str, object]]:
+def _activate_counter_ready(
+    kernel: ActionKernel,
+    event_name: str,
+    fall_event: int,
+    config: Q3Config,
+) -> int:
+    """判断一步防守后是否进入下一步反击准备态。"""
+
+    if kernel.action_type != "defense":
+        return 0
+    if fall_event > 0 or event_name == "score_against":
+        return 0
+    if not str(kernel.preferred_counter_action).strip():
+        return 0
+    return int(kernel.p_score_for >= config.counter_ready_trigger_prob)
+
+
+def build_transition_events(state: MatchState, kernel: ActionKernel, config: Q3Config) -> list[dict[str, object]]:
     """按条件事件树展开一步转移事件。"""
 
     p_success = float(np.clip(kernel.p_score_for, 0.0, 1.0))
@@ -1091,6 +1205,7 @@ def build_transition_events(state: MatchState, kernel: ActionKernel) -> list[dic
                         health_my=next_health_my,
                         health_opp=next_health_opp,
                         recovery_lock=1 if fall_event else 0,
+                        counter_ready=_activate_counter_ready(kernel, event_name, fall_event, config),
                     )
                     events.append(
                         {
@@ -1111,11 +1226,11 @@ def build_transition_events(state: MatchState, kernel: ActionKernel) -> list[dic
     return events
 
 
-def iter_transition_branches(state: MatchState, kernel: ActionKernel) -> list[tuple[float, MatchState]]:
+def iter_transition_branches(state: MatchState, kernel: ActionKernel, config: Q3Config) -> list[tuple[float, MatchState]]:
     """按条件事件树展开一步转移分支。"""
 
     aggregated: dict[MatchState, float] = {}
-    for event in build_transition_events(state, kernel):
+    for event in build_transition_events(state, kernel, config):
         next_state = event["next_state"]
         aggregated[next_state] = aggregated.get(next_state, 0.0) + float(event["probability"])
     return [(probability, next_state) for next_state, probability in aggregated.items()]
@@ -1124,11 +1239,12 @@ def iter_transition_branches(state: MatchState, kernel: ActionKernel) -> list[tu
 def sample_transition_event(
     state: MatchState,
     kernel: ActionKernel,
+    config: Q3Config,
     rng: np.random.Generator,
 ) -> dict[str, object]:
     """从条件事件树中采样一步转移事件。"""
 
-    events = build_transition_events(state, kernel)
+    events = build_transition_events(state, kernel, config)
     if not events:
         return {
             "event_name": "neutral",
@@ -1143,6 +1259,7 @@ def sample_transition_event(
                 health_my=state.health_my,
                 health_opp=state.health_opp,
                 recovery_lock=0,
+                counter_ready=0,
             ),
         }
     probabilities = np.asarray([event["probability"] for event in events], dtype=float)
@@ -1154,4 +1271,4 @@ def sample_transition_event(
 def get_kernel(env: Q3Environment, state: MatchState, action_id: str) -> ActionKernel:
     """读取给定状态与动作的一步核。"""
 
-    return env.kernel_lookup[(state.health_my, state.health_opp, action_id)]
+    return env.kernel_lookup[(state.health_my, state.health_opp, state.counter_ready, action_id)]

@@ -64,6 +64,7 @@ def _choose_best_action(
     subset = env.kernel_table[
         (env.kernel_table["health_my"] == state.health_my)
         & (env.kernel_table["health_opp"] == state.health_opp)
+        & (env.kernel_table["counter_ready"] == state.counter_ready)
         & (env.kernel_table["action_id"].isin(action_ids))
     ].copy()
     if subset.empty:
@@ -86,11 +87,12 @@ def build_greedy_policy(env: Q3Environment) -> pd.DataFrame:
             health_my=int(row["health_my"]),
             health_opp=int(row["health_opp"]),
             recovery_lock=int(row["recovery_lock"]),
+            counter_ready=int(row["counter_ready"]),
         )
         action_id, expected_reward = _choose_best_action(
             env,
             state,
-            available_action_ids(env, state.health_my, state.recovery_lock),
+            available_action_ids(env, state.health_my, state.recovery_lock, state.counter_ready),
         )
         records.append(
             {
@@ -227,7 +229,8 @@ def build_static_policy(env: Q3Environment, static_strategy: pd.DataFrame) -> pd
     for _, row in env.state_table.iterrows():
         health_my = int(row["health_my"])
         recovery_lock = int(row["recovery_lock"])
-        available_ids = available_action_ids(env, health_my, recovery_lock)
+        counter_ready = int(row["counter_ready"])
+        available_ids = available_action_ids(env, health_my, recovery_lock, counter_ready)
         available_prob = {
             action_id: float(strategy_map.get(action_id, 0.0))
             for action_id in available_ids
@@ -313,7 +316,14 @@ def build_rule_policy(env: Q3Environment) -> pd.DataFrame:
         else:
             action_id = counter_defense if 8 <= time_step <= 15 else balanced_attack
 
-        state = MatchState(score_diff, time_step, health_my, int(row["health_opp"]), recovery_lock)
+        state = MatchState(
+            score_diff,
+            time_step,
+            health_my,
+            int(row["health_opp"]),
+            recovery_lock,
+            int(row["counter_ready"]),
+        )
         kernel = get_kernel(env, state, action_id)
         records.append(
             {
@@ -332,36 +342,42 @@ def value_iteration(env: Q3Environment) -> tuple[np.ndarray, pd.DataFrame]:
     score_card = len(SCORE_DIFF_VALUES)
     health_card = len(HEALTH_LEVELS)
     recovery_card = 2
-    values = np.zeros((config.n_time_steps + 1, score_card, health_card, health_card, recovery_card), dtype=float)
+    counter_card = 2
+    values = np.zeros(
+        (config.n_time_steps + 1, score_card, health_card, health_card, recovery_card, counter_card),
+        dtype=float,
+    )
     policy_records: list[dict[str, object]] = []
 
     for score_index, score_diff in enumerate(SCORE_DIFF_VALUES):
         for health_my in HEALTH_LEVELS:
             for health_opp in HEALTH_LEVELS:
                 for recovery_lock in (0, 1):
-                    values[config.n_time_steps, score_index, health_my, health_opp, recovery_lock] = (
-                        config.terminal_reward_win
-                        if score_diff > 0
-                        else config.terminal_reward_loss
-                        if score_diff < 0
-                        else 0.0
-                    )
+                    for counter_ready in (0, 1):
+                        values[config.n_time_steps, score_index, health_my, health_opp, recovery_lock, counter_ready] = (
+                            config.terminal_reward_win
+                            if score_diff > 0
+                            else config.terminal_reward_loss
+                            if score_diff < 0
+                            else 0.0
+                        )
 
     for time_step in range(config.n_time_steps, 0, -1):
         value_index = time_step - 1
         for score_index, score_diff in enumerate(SCORE_DIFF_VALUES):
-                for health_my in HEALTH_LEVELS:
-                    for health_opp in HEALTH_LEVELS:
-                        for recovery_lock in (0, 1):
-                            state = MatchState(score_diff, time_step, health_my, health_opp, recovery_lock)
+            for health_my in HEALTH_LEVELS:
+                for health_opp in HEALTH_LEVELS:
+                    for recovery_lock in (0, 1):
+                        for counter_ready in (0, 1):
+                            state = MatchState(score_diff, time_step, health_my, health_opp, recovery_lock, counter_ready)
                             best_action = ""
                             best_value = -np.inf
                             best_reward = 0.0
 
-                            for action_id in available_action_ids(env, health_my, recovery_lock):
+                            for action_id in available_action_ids(env, health_my, recovery_lock, counter_ready):
                                 kernel = get_kernel(env, state, action_id)
                                 continuation = 0.0
-                                for probability, next_state in iter_transition_branches(state, kernel):
+                                for probability, next_state in iter_transition_branches(state, kernel, config):
                                     next_time_index = min(config.n_time_steps, next_state.time_step - 1)
                                     next_score_index = next_state.score_diff - SCORE_DIFF_VALUES[0]
                                     continuation += probability * values[
@@ -370,6 +386,7 @@ def value_iteration(env: Q3Environment) -> tuple[np.ndarray, pd.DataFrame]:
                                         next_state.health_my,
                                         next_state.health_opp,
                                         next_state.recovery_lock,
+                                        next_state.counter_ready,
                                     ]
                                 q_value = kernel.expected_reward + config.gamma * continuation
                                 if q_value > best_value:
@@ -377,7 +394,7 @@ def value_iteration(env: Q3Environment) -> tuple[np.ndarray, pd.DataFrame]:
                                     best_action = action_id
                                     best_reward = kernel.expected_reward
 
-                            values[value_index, score_index, health_my, health_opp, recovery_lock] = best_value
+                            values[value_index, score_index, health_my, health_opp, recovery_lock, counter_ready] = best_value
                             policy_records.append(
                                 {
                                     "state_index": int(env.state_table.loc[
@@ -385,7 +402,8 @@ def value_iteration(env: Q3Environment) -> tuple[np.ndarray, pd.DataFrame]:
                                         & (env.state_table["time_step"] == time_step)
                                         & (env.state_table["health_my"] == health_my)
                                         & (env.state_table["health_opp"] == health_opp)
-                                        & (env.state_table["recovery_lock"] == recovery_lock),
+                                        & (env.state_table["recovery_lock"] == recovery_lock)
+                                        & (env.state_table["counter_ready"] == counter_ready),
                                         "state_index",
                                     ].iloc[0]),
                                     "mdp_action_id": best_action,
@@ -438,7 +456,10 @@ def build_policy_table(env: Q3Environment) -> PolicyArtifacts:
 def summarize_scenarios(policy_table: pd.DataFrame) -> pd.DataFrame:
     """提取领先、落后、平局三类典型场景的策略摘要。"""
 
-    base_table = policy_table[policy_table["recovery_lock"] == 0].copy()
+    base_table = policy_table[
+        (policy_table["recovery_lock"] == 0)
+        & (policy_table["counter_ready"] == 0)
+    ].copy()
     scenario_filters = {
         "领先局": (base_table["score_diff"] >= 2) & (base_table["time_step"] >= 16),
         "落后局": (base_table["score_diff"] <= -2) & (base_table["time_step"] >= 16),
