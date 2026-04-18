@@ -1,0 +1,5 @@
+﻿method,series_count,series_win_rate,mean_rounds_played,mean_remaining_reset,mean_remaining_pause,mean_remaining_repair,method_label
+optimal_dp,5000,0.9584,2.1568,1.998,0.0334,0.5,最优DP
+exhaustive_static,5000,0.9514,2.1812,1.999,0.1142,0.7076,穷举静态
+all_in_first,5000,0.9436,2.182,1.9994,0.2048,0.7436,首局全投
+fixed_rule,5000,0.85,2.353,1.908,1.3014,0.857,固定规则

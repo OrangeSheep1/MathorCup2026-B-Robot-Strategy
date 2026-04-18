@@ -356,7 +356,7 @@ def plot_trajectory_comparison(trajectory_table: pd.DataFrame, output_path: str 
     zh_font, _ = configure_fonts()
     methods = ["greedy", "mdp"]
     figure = plt.figure(figsize=(7.1, 4.9))
-    grid = figure.add_gridspec(2, 1, height_ratios=[2.15, 0.62], hspace=0.08)
+    grid = figure.add_gridspec(2, 1, height_ratios=[2.15, 0.62], hspace=0.20)
     ax_top = figure.add_subplot(grid[0, 0])
     ax_bottom = figure.add_subplot(grid[1, 0])
     if trajectory_table.empty:

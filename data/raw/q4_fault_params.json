@@ -1,0 +1,18 @@
+{
+  "match_time_s": 420,
+  "time_bucket_s": 20,
+  "lambda_0": 0.02,
+  "k_fault": 3.0,
+  "delta_H_pause": 0.2,
+  "delta_H_reset": 0.1,
+  "p_score_loss_per_step": 0.15,
+  "tau_repair_buckets": 15,
+  "tau_pause_buckets": 3,
+  "tau_reset_buckets": 1,
+  "base_win_scale": 1.0,
+  "fall_down_weight": 0.35,
+  "resource_time_mode": "opportunity_bucket",
+  "max_reset": 2,
+  "max_pause": 2,
+  "max_repair": 1
+}
