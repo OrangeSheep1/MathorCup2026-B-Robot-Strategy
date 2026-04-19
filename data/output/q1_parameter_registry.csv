@@ -524,6 +524,7 @@ torso_eccentricity_m,global_assumption,assumption,0.15,-,src/q1/model_v1.py,MODE
 body_charge_gamma,global_assumption,assumption,0.35,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,冲撞平动对质心偏移的折减系数。
 counter_recovery_gamma,global_assumption,assumption,0.15,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,倒地恢复平动对质心偏移的折减系数。
 dynamic_gravity_m_s2,global_assumption,assumption,9.81,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,重力加速度常数，用于 ZMP 近似与恢复功计算。
+dynamic_peak_acc_cap_m_s2,global_assumption,assumption,7.0,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,动态峰值加速度上限，用于避免极短相位将 ZMP 动态项放大过头。
 exposure_time_ref_s,global_assumption,assumption,0.6,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,暴露指数的参考时间尺度。
 exposure_phase_alpha,global_assumption,assumption,0.15,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,多阶段动作的暴露累积系数。
 exposure_switch_beta,global_assumption,assumption,0.1,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,支撑切换次数对暴露的附加系数。

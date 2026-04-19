@@ -3,12 +3,12 @@ A04,swing_punch,D08,D18,D18,D14
 A06,side_kick,D06,D06,D14,D14
 A01,straight_punch,D08,D18,D18,D14
 A02,hook_punch,D06,D06,D14,D14
-A09,knee_strike,D05,D12,D12,D15
-A05,front_kick,D05,D12,D12,D14
+A09,knee_strike,D05,D12,D12,D14
+A05,front_kick,D05,D12,D14,D14
 A03,combo_punch,D01,D18,D14,D14
 A08,low_sweep,D08,D19,D19,D14
 A10,punch_kick_combo,D22,D22,D14,D14
 A12,body_charge,D16,D12,D12,D15
 A11,five_kick_combo,D12,D12,D14,D14
 A07,spinning_kick,D08,D18,D14,D14
-A13,counter_after_fall,D18,D22,D14,D14
+A13,counter_after_fall,D18,D22,D16,D14

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-19T17:29:53",
+  "generated_at": "2026-04-19T17:51:26",
   "input_files": {
     "robot": "E:\\Python Project\\6.Practical_project\\yt\\14\\16th_MathorCup\\MathorCup2026-B-Robot-Strategy\\data\\raw\\q1_robot_params.csv",
     "segments": "E:\\Python Project\\6.Practical_project\\yt\\14\\16th_MathorCup\\MathorCup2026-B-Robot-Strategy\\data\\raw\\q1_segment_params.csv",
@@ -70,6 +70,7 @@
     "body_charge_gamma": 0.35,
     "counter_recovery_gamma": 0.15,
     "dynamic_gravity_m_s2": 9.81,
+    "dynamic_peak_acc_cap_m_s2": 7.0,
     "exposure_time_ref_s": 0.6,
     "exposure_phase_alpha": 0.15,
     "exposure_switch_beta": 0.1,

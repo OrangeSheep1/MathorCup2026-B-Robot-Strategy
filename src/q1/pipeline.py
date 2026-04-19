@@ -155,6 +155,7 @@ def build_parameter_registry(
         "body_charge_gamma": "冲撞平动对质心偏移的折减系数。",
         "counter_recovery_gamma": "倒地恢复平动对质心偏移的折减系数。",
         "dynamic_gravity_m_s2": "重力加速度常数，用于 ZMP 近似与恢复功计算。",
+        "dynamic_peak_acc_cap_m_s2": "动态峰值加速度上限，用于避免极短相位将 ZMP 动态项放大过头。",
         "exposure_time_ref_s": "暴露指数的参考时间尺度。",
         "exposure_phase_alpha": "多阶段动作的暴露累积系数。",
         "exposure_switch_beta": "支撑切换次数对暴露的附加系数。",
@@ -478,6 +479,7 @@ def run_pipeline() -> tuple[pd.DataFrame, dict[str, float]]:
         phase_templates=action_phases,
         segments=segments,
         support_modes=support_modes,
+        total_joint_count=robot.joint_count,
     )
     parameter_registry = build_parameter_registry(
         robot_param_path=ROBOT_RAW_FILE,

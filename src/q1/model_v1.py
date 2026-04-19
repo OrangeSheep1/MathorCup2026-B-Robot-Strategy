@@ -103,6 +103,7 @@ MODEL_ASSUMPTIONS = {
     "body_charge_gamma": 0.35,
     "counter_recovery_gamma": 0.15,
     "dynamic_gravity_m_s2": 9.81,
+    "dynamic_peak_acc_cap_m_s2": 7.00,
     "exposure_time_ref_s": 0.60,
     "exposure_phase_alpha": 0.15,
     "exposure_switch_beta": 0.10,
@@ -441,6 +442,7 @@ def validate_q1_configuration(
     phase_templates: pd.DataFrame,
     segments: pd.DataFrame,
     support_modes: pd.DataFrame,
+    total_joint_count: int,
 ) -> None:
     """鍦ㄤ富璁＄畻鍓嶅 Q1 閰嶇疆鍋氭渶鍚庝竴杞竴鑷存€ф牎楠屻€?"""
 
@@ -459,6 +461,12 @@ def validate_q1_configuration(
         support_mode = str(row["support_mode"])
         if support_mode not in support_mode_ids:
             raise ValueError(f"{action_id} 在动作主表中引用了未定义的 support_mode: {support_mode}")
+
+        active_joint_count = int(row["active_joint_count"])
+        if active_joint_count <= 0 or active_joint_count > int(total_joint_count):
+            raise ValueError(
+                f"{action_id} 的 active_joint_count={active_joint_count} 超出有效范围，应在 1 到 {int(total_joint_count)} 之间"
+            )
 
         action_segments = _json_segment_keys(row)
         missing_segments = sorted(action_segments - segment_ids)
@@ -679,6 +687,7 @@ def _phase_com_shift(
     com_shift = (rotational_shift + translation_shift) * plane_factor * support_factor
 
     peak_acc = 0.0 if phase_time_s <= 1e-9 else 4.0 * com_shift / (phase_time_s**2)
+    peak_acc = min(peak_acc, MODEL_ASSUMPTIONS["dynamic_peak_acc_cap_m_s2"])
     dynamic_extra = robot.com_height_m / MODEL_ASSUMPTIONS["dynamic_gravity_m_s2"] * peak_acc
     zmp_excursion = com_shift + dynamic_extra + float(support_row["zmp_bias_coeff"]) * com_shift
     support_margin_mode = robot.stable_margin_m * float(support_row["support_margin_ratio"])
