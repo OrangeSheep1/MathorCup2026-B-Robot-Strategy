@@ -1,0 +1,7 @@
+support_mode,support_margin_ratio,zmp_bias_coeff,contact_type,description
+double_support,1.00,0.00,both_feet,双足稳态支撑，适用于拳法与小幅转体
+dynamic_double_support,0.85,0.08,both_feet_dynamic,双足动态前移或逼近，适用于冲撞和快步压迫
+single_support,0.55,0.25,one_foot,单足支撑，适用于前踢侧踢和低扫
+quasi_single_support,0.65,0.15,staggered_one_foot,准单足支撑，适用于膝撞等近身提膝
+single_support_rotational,0.40,0.40,one_foot_rotational,旋转单足支撑，适用于回旋踢等大角速度动作
+recovery_transition,0.30,0.50,ground_to_feet,倒地恢复到站立过渡，适用于倒地反击起身阶段

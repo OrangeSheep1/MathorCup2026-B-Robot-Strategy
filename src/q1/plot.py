@@ -198,7 +198,7 @@ def plot_impact_balance_scatter(data: pd.DataFrame, output_path: str | Path) -> 
         )
 
     _set_axis_style(ax)
-    _set_chinese_axis_labels(ax, "攻击效果与平衡代价权衡图", "冲击力矩 / N·m", "质心偏移 / m", zh_font)
+    _set_chinese_axis_labels(ax, "冲击效应与静态偏移权衡图", "冲击冲量代理", "质心偏移峰值 / m", zh_font)
     colorbar = figure.colorbar(scatter, ax=ax, pad=0.02)
     colorbar.set_label("归一化效用", fontproperties=zh_font, fontsize=LABEL_SIZE)
     figure.tight_layout()
@@ -344,7 +344,7 @@ def plot_penalty_curve(data: pd.DataFrame, output_path: str | Path) -> Path:
         )
 
     _set_axis_style(ax)
-    _set_chinese_axis_labels(ax, "非线性倒地惩罚函数与动作落点", "质心偏移 / m", "原始惩罚项（对数尺度）", zh_font)
+    _set_chinese_axis_labels(ax, "风险惩罚代理与动作落点", "质心偏移峰值 / m", "风险惩罚代理（对数尺度）", zh_font)
     figure.tight_layout()
 
     output = Path(output_path)
@@ -395,7 +395,7 @@ def plot_decision_atlas(data: pd.DataFrame, output_path: str | Path) -> Path:
         )
 
     _set_axis_style(ax)
-    _set_chinese_axis_labels(ax, "方法四决策图谱", "稳定性比值 ΔCoM / θstable", "基础效用 U0", zh_font)
+    _set_chinese_axis_labels(ax, "方法四决策图谱", "稳定性比值 r_zmp / d_sup", "基础效用 U0", zh_font)
     colorbar = figure.colorbar(contour, ax=ax, pad=0.02)
     colorbar.set_label("最终得分等高面", fontproperties=zh_font, fontsize=LABEL_SIZE)
     figure.tight_layout()
@@ -429,8 +429,8 @@ def plot_sensitivity_heatmap(
         ax.set_yticks(np.arange(len(matrix.index)))
         ax.set_yticklabels(matrix.index, fontsize=TICK_SIZE)
         ax.set_title(title, fontproperties=zh_font, fontsize=LABEL_SIZE, pad=10)
-        ax.set_xlabel("k", fontproperties=zh_font, fontsize=LABEL_SIZE - 1)
-        ax.set_ylabel("λ", fontproperties=zh_font, fontsize=LABEL_SIZE - 1)
+        ax.set_xlabel("冲击权重", fontproperties=zh_font, fontsize=LABEL_SIZE - 1)
+        ax.set_ylabel("风险缩放", fontproperties=zh_font, fontsize=LABEL_SIZE - 1)
         for row_idx in range(matrix.shape[0]):
             for col_idx in range(matrix.shape[1]):
                 ax.text(
@@ -447,7 +447,7 @@ def plot_sensitivity_heatmap(
     colorbar_left.set_label("比例", fontproperties=zh_font, fontsize=LABEL_SIZE - 2)
     colorbar_right = figure.colorbar(images[1], ax=axes[1], pad=0.02)
     colorbar_right.set_label("效用", fontproperties=zh_font, fontsize=LABEL_SIZE - 2)
-    figure.suptitle("惩罚参数灵敏度分析", fontproperties=zh_font, fontsize=TITLE_SIZE, y=0.98)
+    figure.suptitle("风险调整模型灵敏度分析", fontproperties=zh_font, fontsize=TITLE_SIZE, y=0.98)
     figure.tight_layout(rect=[0, 0, 1, 0.95])
 
     output = Path(output_path)

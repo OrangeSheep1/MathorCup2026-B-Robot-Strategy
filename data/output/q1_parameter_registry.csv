@@ -1,0 +1,543 @@
+﻿parameter_name,parameter_scope,source_class,value,unit,location,source_detail,notes
+total_height_m,robot,official,1.4,m,q1_robot_params.csv,official,机器人总高度
+total_mass_kg,robot,official,42.0,kg,q1_robot_params.csv,official,含电池总质量
+leg_length_m,robot,official,0.6865,m,q1_robot_params.csv,official,小腿加大腿总长
+arm_span_m,robot,official,1.44,m,q1_robot_params.csv,official,双臂臂展
+max_joint_torque_nm,robot,official,145.0,Nm,q1_robot_params.csv,official,Q90H最大力矩
+max_motor_speed_rpm,robot,official,6400.0,rpm,q1_robot_params.csv,official,Q90H最高转速
+reducer_ratio,robot,official,25.0,ratio,q1_robot_params.csv,official,Q90H减速比
+joint_mass_kg,robot,official,1.1,kg,q1_robot_params.csv,official,单关节质量
+joint_count,robot,official,23.0,count,q1_robot_params.csv,official,关节总数
+body_width_m,robot,official,0.53555,m,q1_robot_params.csv,official,机器人宽度
+arm_length_m,robot,derived,0.72,m,RobotParams,derived_from_official,由臂展除以 2 得到
+upper_arm_length_m,robot,derived,0.3384,m,RobotParams,derived_from_official,由单臂长度乘 0.47 得到
+forearm_hand_length_m,robot,derived,0.3816,m,RobotParams,derived_from_official,由单臂长度乘 0.53 得到
+thigh_length_m,robot,derived,0.37071000000000004,m,RobotParams,derived_from_official,由腿长乘 0.54 得到
+shank_foot_length_m,robot,derived,0.31579,m,RobotParams,derived_from_official,由腿长乘 0.46 得到
+omega_out_rad_s,robot,derived,26.808257310632904,rad/s,RobotParams,derived_from_official,由电机转速和减速比推导
+omega_eff_rad_s,robot,derived,16.084954386379742,rad/s,RobotParams,derived_from_official,由输出轴角速度乘有效速度折减得到
+com_height_m,robot,derived,1.0075749999999999,m,RobotParams,derived_from_official,由腿长与上体质心比例推导
+foot_spacing_m,robot,derived,0.32132999999999995,m,RobotParams,derived_from_official,由机体宽度和双足站姿比例推导
+stable_margin_m,robot,derived,0.12633,m,RobotParams,derived_from_official,由双足间距与支撑深度保守口径共同确定
+mass_ratio,segment:S1,derived,0.08,ratio,q1_segment_params.csv,derived_from_mass_partition,10 刚体节段质量比例。
+mass_kg,segment:S1,derived,3.36,kg,q1_segment_params.csv,derived_from_mass_partition,按总质量乘节段比例得到。
+length_m,segment:S1,derived,0.182,m,q1_segment_params.csv,derived_from_length_partition,按单臂或单腿长度比例推导。
+com_local_ratio,segment:S1,assumption,0.5,ratio,q1_segment_params.csv,uniform_rigid_body_assumption,节段质心在局部长度上的比例位置。
+inertia_coeff,segment:S1,assumption,0.25,-,q1_segment_params.csv,reserved_dynamic_extension,节段转动惯量代理系数，目前作为扩展接口预留。
+mass_ratio,segment:S2,derived,0.48,ratio,q1_segment_params.csv,derived_from_mass_partition,10 刚体节段质量比例。
+mass_kg,segment:S2,derived,20.16,kg,q1_segment_params.csv,derived_from_mass_partition,按总质量乘节段比例得到。
+length_m,segment:S2,derived,0.5315,m,q1_segment_params.csv,derived_from_length_partition,按单臂或单腿长度比例推导。
+com_local_ratio,segment:S2,assumption,0.5,ratio,q1_segment_params.csv,uniform_rigid_body_assumption,节段质心在局部长度上的比例位置。
+inertia_coeff,segment:S2,assumption,0.3,-,q1_segment_params.csv,reserved_dynamic_extension,节段转动惯量代理系数，目前作为扩展接口预留。
+mass_ratio,segment:S3,derived,0.0385,ratio,q1_segment_params.csv,derived_from_mass_partition,10 刚体节段质量比例。
+mass_kg,segment:S3,derived,1.617,kg,q1_segment_params.csv,derived_from_mass_partition,按总质量乘节段比例得到。
+length_m,segment:S3,derived,0.3384,m,q1_segment_params.csv,derived_from_length_partition,按单臂或单腿长度比例推导。
+com_local_ratio,segment:S3,assumption,0.436,ratio,q1_segment_params.csv,uniform_rigid_body_assumption,节段质心在局部长度上的比例位置。
+inertia_coeff,segment:S3,assumption,0.33,-,q1_segment_params.csv,reserved_dynamic_extension,节段转动惯量代理系数，目前作为扩展接口预留。
+mass_ratio,segment:S4,derived,0.0385,ratio,q1_segment_params.csv,derived_from_mass_partition,10 刚体节段质量比例。
+mass_kg,segment:S4,derived,1.617,kg,q1_segment_params.csv,derived_from_mass_partition,按总质量乘节段比例得到。
+length_m,segment:S4,derived,0.3384,m,q1_segment_params.csv,derived_from_length_partition,按单臂或单腿长度比例推导。
+com_local_ratio,segment:S4,assumption,0.436,ratio,q1_segment_params.csv,uniform_rigid_body_assumption,节段质心在局部长度上的比例位置。
+inertia_coeff,segment:S4,assumption,0.33,-,q1_segment_params.csv,reserved_dynamic_extension,节段转动惯量代理系数，目前作为扩展接口预留。
+mass_ratio,segment:S5,derived,0.0315,ratio,q1_segment_params.csv,derived_from_mass_partition,10 刚体节段质量比例。
+mass_kg,segment:S5,derived,1.323,kg,q1_segment_params.csv,derived_from_mass_partition,按总质量乘节段比例得到。
+length_m,segment:S5,derived,0.3816,m,q1_segment_params.csv,derived_from_length_partition,按单臂或单腿长度比例推导。
+com_local_ratio,segment:S5,assumption,0.43,ratio,q1_segment_params.csv,uniform_rigid_body_assumption,节段质心在局部长度上的比例位置。
+inertia_coeff,segment:S5,assumption,0.33,-,q1_segment_params.csv,reserved_dynamic_extension,节段转动惯量代理系数，目前作为扩展接口预留。
+mass_ratio,segment:S6,derived,0.0315,ratio,q1_segment_params.csv,derived_from_mass_partition,10 刚体节段质量比例。
+mass_kg,segment:S6,derived,1.323,kg,q1_segment_params.csv,derived_from_mass_partition,按总质量乘节段比例得到。
+length_m,segment:S6,derived,0.3816,m,q1_segment_params.csv,derived_from_length_partition,按单臂或单腿长度比例推导。
+com_local_ratio,segment:S6,assumption,0.43,ratio,q1_segment_params.csv,uniform_rigid_body_assumption,节段质心在局部长度上的比例位置。
+inertia_coeff,segment:S6,assumption,0.33,-,q1_segment_params.csv,reserved_dynamic_extension,节段转动惯量代理系数，目前作为扩展接口预留。
+mass_ratio,segment:S7,derived,0.081,ratio,q1_segment_params.csv,derived_from_mass_partition,10 刚体节段质量比例。
+mass_kg,segment:S7,derived,3.402,kg,q1_segment_params.csv,derived_from_mass_partition,按总质量乘节段比例得到。
+length_m,segment:S7,derived,0.3707,m,q1_segment_params.csv,derived_from_length_partition,按单臂或单腿长度比例推导。
+com_local_ratio,segment:S7,assumption,0.433,ratio,q1_segment_params.csv,uniform_rigid_body_assumption,节段质心在局部长度上的比例位置。
+inertia_coeff,segment:S7,assumption,0.33,-,q1_segment_params.csv,reserved_dynamic_extension,节段转动惯量代理系数，目前作为扩展接口预留。
+mass_ratio,segment:S8,derived,0.081,ratio,q1_segment_params.csv,derived_from_mass_partition,10 刚体节段质量比例。
+mass_kg,segment:S8,derived,3.402,kg,q1_segment_params.csv,derived_from_mass_partition,按总质量乘节段比例得到。
+length_m,segment:S8,derived,0.3707,m,q1_segment_params.csv,derived_from_length_partition,按单臂或单腿长度比例推导。
+com_local_ratio,segment:S8,assumption,0.433,ratio,q1_segment_params.csv,uniform_rigid_body_assumption,节段质心在局部长度上的比例位置。
+inertia_coeff,segment:S8,assumption,0.33,-,q1_segment_params.csv,reserved_dynamic_extension,节段转动惯量代理系数，目前作为扩展接口预留。
+mass_ratio,segment:S9,derived,0.069,ratio,q1_segment_params.csv,derived_from_mass_partition,10 刚体节段质量比例。
+mass_kg,segment:S9,derived,2.898,kg,q1_segment_params.csv,derived_from_mass_partition,按总质量乘节段比例得到。
+length_m,segment:S9,derived,0.3158,m,q1_segment_params.csv,derived_from_length_partition,按单臂或单腿长度比例推导。
+com_local_ratio,segment:S9,assumption,0.433,ratio,q1_segment_params.csv,uniform_rigid_body_assumption,节段质心在局部长度上的比例位置。
+inertia_coeff,segment:S9,assumption,0.33,-,q1_segment_params.csv,reserved_dynamic_extension,节段转动惯量代理系数，目前作为扩展接口预留。
+mass_ratio,segment:S10,derived,0.069,ratio,q1_segment_params.csv,derived_from_mass_partition,10 刚体节段质量比例。
+mass_kg,segment:S10,derived,2.898,kg,q1_segment_params.csv,derived_from_mass_partition,按总质量乘节段比例得到。
+length_m,segment:S10,derived,0.3158,m,q1_segment_params.csv,derived_from_length_partition,按单臂或单腿长度比例推导。
+com_local_ratio,segment:S10,assumption,0.433,ratio,q1_segment_params.csv,uniform_rigid_body_assumption,节段质心在局部长度上的比例位置。
+inertia_coeff,segment:S10,assumption,0.33,-,q1_segment_params.csv,reserved_dynamic_extension,节段转动惯量代理系数，目前作为扩展接口预留。
+support_margin_ratio,support_mode:double_support,assumption,1.0,ratio,q1_support_mode_config.csv,support_mode_assumption,不同支撑模式对基础稳定裕度的缩减比例。
+zmp_bias_coeff,support_mode:double_support,assumption,0.0,-,q1_support_mode_config.csv,support_mode_assumption,不同支撑模式下对动态 ZMP 偏移的附加偏置。
+support_margin_ratio,support_mode:dynamic_double_support,assumption,0.85,ratio,q1_support_mode_config.csv,support_mode_assumption,不同支撑模式对基础稳定裕度的缩减比例。
+zmp_bias_coeff,support_mode:dynamic_double_support,assumption,0.08,-,q1_support_mode_config.csv,support_mode_assumption,不同支撑模式下对动态 ZMP 偏移的附加偏置。
+support_margin_ratio,support_mode:single_support,assumption,0.55,ratio,q1_support_mode_config.csv,support_mode_assumption,不同支撑模式对基础稳定裕度的缩减比例。
+zmp_bias_coeff,support_mode:single_support,assumption,0.25,-,q1_support_mode_config.csv,support_mode_assumption,不同支撑模式下对动态 ZMP 偏移的附加偏置。
+support_margin_ratio,support_mode:quasi_single_support,assumption,0.65,ratio,q1_support_mode_config.csv,support_mode_assumption,不同支撑模式对基础稳定裕度的缩减比例。
+zmp_bias_coeff,support_mode:quasi_single_support,assumption,0.15,-,q1_support_mode_config.csv,support_mode_assumption,不同支撑模式下对动态 ZMP 偏移的附加偏置。
+support_margin_ratio,support_mode:single_support_rotational,assumption,0.4,ratio,q1_support_mode_config.csv,support_mode_assumption,不同支撑模式对基础稳定裕度的缩减比例。
+zmp_bias_coeff,support_mode:single_support_rotational,assumption,0.4,-,q1_support_mode_config.csv,support_mode_assumption,不同支撑模式下对动态 ZMP 偏移的附加偏置。
+support_margin_ratio,support_mode:recovery_transition,assumption,0.3,ratio,q1_support_mode_config.csv,support_mode_assumption,不同支撑模式对基础稳定裕度的缩减比例。
+zmp_bias_coeff,support_mode:recovery_transition,assumption,0.5,-,q1_support_mode_config.csv,support_mode_assumption,不同支撑模式下对动态 ZMP 偏移的附加偏置。
+coordination_efficiency,action:A01,assumption,0.7,-,q1_attack_actions.csv,方法一协同效率设定,动作数值源表中的动作层建模设定。
+active_joint_count,action:A01,assumption,2,count,q1_attack_actions.csv,动作链计数,动作数值源表中的动作层建模设定。
+theta_total_deg,action:A01,assumption,50.0,deg,q1_attack_actions.csv,题解动作角度设定,动作数值源表中的动作层建模设定。
+exec_time_s,action:A01,assumption,0.3,s,q1_attack_actions.csv,题解执行时间设定,动作数值源表中的动作层建模设定。
+p_target_geo,action:A01,assumption,0.76,ratio,q1_attack_actions.csv,题解几何覆盖设定,动作数值源表中的动作层建模设定。
+coordination_efficiency,action:A02,assumption,0.72,-,q1_attack_actions.csv,方法一协同效率设定,动作数值源表中的动作层建模设定。
+active_joint_count,action:A02,assumption,2,count,q1_attack_actions.csv,动作链计数,动作数值源表中的动作层建模设定。
+theta_total_deg,action:A02,assumption,70.0,deg,q1_attack_actions.csv,题解动作角度设定,动作数值源表中的动作层建模设定。
+exec_time_s,action:A02,assumption,0.45,s,q1_attack_actions.csv,题解执行时间设定,动作数值源表中的动作层建模设定。
+p_target_geo,action:A02,assumption,0.74,ratio,q1_attack_actions.csv,题解几何覆盖设定,动作数值源表中的动作层建模设定。
+coordination_efficiency,action:A03,assumption,0.68,-,q1_attack_actions.csv,方法一协同效率设定,动作数值源表中的动作层建模设定。
+active_joint_count,action:A03,assumption,4,count,q1_attack_actions.csv,动作链计数,动作数值源表中的动作层建模设定。
+theta_total_deg,action:A03,assumption,100.0,deg,q1_attack_actions.csv,题解动作角度设定,动作数值源表中的动作层建模设定。
+exec_time_s,action:A03,assumption,0.8,s,q1_attack_actions.csv,题解执行时间设定,动作数值源表中的动作层建模设定。
+p_target_geo,action:A03,assumption,0.76,ratio,q1_attack_actions.csv,题解几何覆盖设定,动作数值源表中的动作层建模设定。
+coordination_efficiency,action:A04,assumption,0.78,-,q1_attack_actions.csv,方法一协同效率设定,动作数值源表中的动作层建模设定。
+active_joint_count,action:A04,assumption,3,count,q1_attack_actions.csv,动作链计数,动作数值源表中的动作层建模设定。
+theta_total_deg,action:A04,assumption,150.0,deg,q1_attack_actions.csv,题解动作角度设定,动作数值源表中的动作层建模设定。
+exec_time_s,action:A04,assumption,0.55,s,q1_attack_actions.csv,题解执行时间设定,动作数值源表中的动作层建模设定。
+p_target_geo,action:A04,assumption,0.72,ratio,q1_attack_actions.csv,题解几何覆盖设定,动作数值源表中的动作层建模设定。
+coordination_efficiency,action:A05,assumption,0.75,-,q1_attack_actions.csv,方法一协同效率设定,动作数值源表中的动作层建模设定。
+active_joint_count,action:A05,assumption,2,count,q1_attack_actions.csv,动作链计数,动作数值源表中的动作层建模设定。
+theta_total_deg,action:A05,assumption,90.0,deg,q1_attack_actions.csv,题解动作角度设定,动作数值源表中的动作层建模设定。
+exec_time_s,action:A05,assumption,0.6,s,q1_attack_actions.csv,题解执行时间设定,动作数值源表中的动作层建模设定。
+p_target_geo,action:A05,assumption,0.74,ratio,q1_attack_actions.csv,题解几何覆盖设定,动作数值源表中的动作层建模设定。
+coordination_efficiency,action:A06,assumption,0.8,-,q1_attack_actions.csv,方法一协同效率设定,动作数值源表中的动作层建模设定。
+active_joint_count,action:A06,assumption,2,count,q1_attack_actions.csv,动作链计数,动作数值源表中的动作层建模设定。
+theta_total_deg,action:A06,assumption,120.0,deg,q1_attack_actions.csv,题解动作角度设定,动作数值源表中的动作层建模设定。
+exec_time_s,action:A06,assumption,0.65,s,q1_attack_actions.csv,题解执行时间设定,动作数值源表中的动作层建模设定。
+p_target_geo,action:A06,assumption,0.74,ratio,q1_attack_actions.csv,题解几何覆盖设定,动作数值源表中的动作层建模设定。
+coordination_efficiency,action:A07,assumption,0.82,-,q1_attack_actions.csv,方法一协同效率设定,动作数值源表中的动作层建模设定。
+active_joint_count,action:A07,assumption,3,count,q1_attack_actions.csv,动作链计数,动作数值源表中的动作层建模设定。
+theta_total_deg,action:A07,assumption,380.0,deg,q1_attack_actions.csv,题解动作角度设定,动作数值源表中的动作层建模设定。
+exec_time_s,action:A07,assumption,0.85,s,q1_attack_actions.csv,题解执行时间设定,动作数值源表中的动作层建模设定。
+p_target_geo,action:A07,assumption,0.72,ratio,q1_attack_actions.csv,题解几何覆盖设定,动作数值源表中的动作层建模设定。
+coordination_efficiency,action:A08,assumption,0.7,-,q1_attack_actions.csv,方法一协同效率设定,动作数值源表中的动作层建模设定。
+active_joint_count,action:A08,assumption,2,count,q1_attack_actions.csv,动作链计数,动作数值源表中的动作层建模设定。
+theta_total_deg,action:A08,assumption,60.0,deg,q1_attack_actions.csv,题解动作角度设定,动作数值源表中的动作层建模设定。
+exec_time_s,action:A08,assumption,0.5,s,q1_attack_actions.csv,题解执行时间设定,动作数值源表中的动作层建模设定。
+p_target_geo,action:A08,assumption,0.6,ratio,q1_attack_actions.csv,题解几何覆盖设定,动作数值源表中的动作层建模设定。
+coordination_efficiency,action:A09,assumption,0.9,-,q1_attack_actions.csv,方法一协同效率设定,动作数值源表中的动作层建模设定。
+active_joint_count,action:A09,assumption,1,count,q1_attack_actions.csv,动作链计数,动作数值源表中的动作层建模设定。
+theta_total_deg,action:A09,assumption,70.0,deg,q1_attack_actions.csv,题解动作角度设定,动作数值源表中的动作层建模设定。
+exec_time_s,action:A09,assumption,0.35,s,q1_attack_actions.csv,题解执行时间设定,动作数值源表中的动作层建模设定。
+p_target_geo,action:A09,assumption,0.8,ratio,q1_attack_actions.csv,题解几何覆盖设定,动作数值源表中的动作层建模设定。
+coordination_efficiency,action:A10,assumption,0.65,-,q1_attack_actions.csv,方法一协同效率设定,动作数值源表中的动作层建模设定。
+active_joint_count,action:A10,assumption,4,count,q1_attack_actions.csv,动作链计数,动作数值源表中的动作层建模设定。
+theta_total_deg,action:A10,assumption,140.0,deg,q1_attack_actions.csv,题解动作角度设定,动作数值源表中的动作层建模设定。
+exec_time_s,action:A10,assumption,1.1,s,q1_attack_actions.csv,题解执行时间设定,动作数值源表中的动作层建模设定。
+p_target_geo,action:A10,assumption,0.82,ratio,q1_attack_actions.csv,题解几何覆盖设定,动作数值源表中的动作层建模设定。
+coordination_efficiency,action:A11,assumption,0.62,-,q1_attack_actions.csv,方法一协同效率设定,动作数值源表中的动作层建模设定。
+active_joint_count,action:A11,assumption,10,count,q1_attack_actions.csv,动作链计数,动作数值源表中的动作层建模设定。
+theta_total_deg,action:A11,assumption,450.0,deg,q1_attack_actions.csv,题解动作角度设定,动作数值源表中的动作层建模设定。
+exec_time_s,action:A11,assumption,1.7,s,q1_attack_actions.csv,题解执行时间设定,动作数值源表中的动作层建模设定。
+p_target_geo,action:A11,assumption,0.74,ratio,q1_attack_actions.csv,题解几何覆盖设定,动作数值源表中的动作层建模设定。
+coordination_efficiency,action:A12,assumption,0.85,-,q1_attack_actions.csv,方法一协同效率设定,动作数值源表中的动作层建模设定。
+active_joint_count,action:A12,assumption,4,count,q1_attack_actions.csv,动作链计数,动作数值源表中的动作层建模设定。
+theta_total_deg,action:A12,assumption,,deg,q1_attack_actions.csv,相位表角位移求和回退,动作数值源表中的动作层建模设定。
+exec_time_s,action:A12,assumption,0.75,s,q1_attack_actions.csv,题解执行时间设定,动作数值源表中的动作层建模设定。
+p_target_geo,action:A12,assumption,0.8,ratio,q1_attack_actions.csv,题解几何覆盖设定,动作数值源表中的动作层建模设定。
+coordination_efficiency,action:A13,assumption,0.5,-,q1_attack_actions.csv,方法一协同效率设定,动作数值源表中的动作层建模设定。
+active_joint_count,action:A13,assumption,6,count,q1_attack_actions.csv,动作链计数,动作数值源表中的动作层建模设定。
+theta_total_deg,action:A13,assumption,,deg,q1_attack_actions.csv,相位表角位移求和回退,动作数值源表中的动作层建模设定。
+exec_time_s,action:A13,assumption,1.9,s,q1_attack_actions.csv,题解执行时间设定,动作数值源表中的动作层建模设定。
+p_target_geo,action:A13,assumption,0.72,ratio,q1_attack_actions.csv,题解几何覆盖设定,动作数值源表中的动作层建模设定。
+laterality,template:A01,assumption,unilateral_upper,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+conditional_flag,template:A01,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+trigger_state,template:A01,assumption,standing,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_mode,template:A01,assumption,double_support,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+phase_count,template:A01,assumption,1,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+main_plane,template:A01,assumption,sagittal,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+range_tag,template:A01,assumption,mid,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+rotation_complexity,template:A01,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_switch_count,template:A01,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+translation_distance_m,template:A01,assumption,0.0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+active_segments_json,template:A01,assumption,"[""S2"", ""S4"", ""S6""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_segments_json,template:A01,assumption,"[""S7"", ""S8"", ""S9"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+strike_segments_json,template:A01,assumption,"[""S6""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+impact_weight_json,template:A01,assumption,"{""S2"": 0.15, ""S4"": 0.25, ""S6"": 0.6}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+stability_weight_json,template:A01,assumption,"{""S2"": 0.5, ""S4"": 0.2, ""S6"": 0.3}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+theta_share_json,template:A01,assumption,"{""S2"": 0.1, ""S4"": 0.35, ""S6"": 0.55}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+laterality,template:A02,assumption,unilateral_upper,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+conditional_flag,template:A02,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+trigger_state,template:A02,assumption,standing,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_mode,template:A02,assumption,double_support,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+phase_count,template:A02,assumption,1,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+main_plane,template:A02,assumption,transverse,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+range_tag,template:A02,assumption,close,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+rotation_complexity,template:A02,assumption,1,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_switch_count,template:A02,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+translation_distance_m,template:A02,assumption,0.0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+active_segments_json,template:A02,assumption,"[""S2"", ""S4"", ""S6""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_segments_json,template:A02,assumption,"[""S7"", ""S8"", ""S9"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+strike_segments_json,template:A02,assumption,"[""S6""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+impact_weight_json,template:A02,assumption,"{""S2"": 0.25, ""S4"": 0.25, ""S6"": 0.5}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+stability_weight_json,template:A02,assumption,"{""S2"": 0.55, ""S4"": 0.15, ""S6"": 0.3}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+theta_share_json,template:A02,assumption,"{""S2"": 0.25, ""S4"": 0.3, ""S6"": 0.45}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+laterality,template:A03,assumption,bilateral_upper,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+conditional_flag,template:A03,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+trigger_state,template:A03,assumption,standing,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_mode,template:A03,assumption,double_support,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+phase_count,template:A03,assumption,2,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+main_plane,template:A03,assumption,multi_plane,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+range_tag,template:A03,assumption,close,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+rotation_complexity,template:A03,assumption,1,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_switch_count,template:A03,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+translation_distance_m,template:A03,assumption,0.0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+active_segments_json,template:A03,assumption,"[""S2"", ""S3"", ""S5"", ""S4"", ""S6""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_segments_json,template:A03,assumption,"[""S7"", ""S8"", ""S9"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+strike_segments_json,template:A03,assumption,"[""S5"", ""S6""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+impact_weight_json,template:A03,assumption,"{""S2"": 0.15, ""S3"": 0.1, ""S5"": 0.25, ""S4"": 0.1, ""S6"": 0.4}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+stability_weight_json,template:A03,assumption,"{""S2"": 0.4, ""S3"": 0.1, ""S5"": 0.2, ""S4"": 0.1, ""S6"": 0.2}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+theta_share_json,template:A03,assumption,"{""S2"": 0.1, ""S3"": 0.15, ""S5"": 0.25, ""S4"": 0.15, ""S6"": 0.35}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+laterality,template:A04,assumption,unilateral_upper,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+conditional_flag,template:A04,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+trigger_state,template:A04,assumption,standing,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_mode,template:A04,assumption,double_support,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+phase_count,template:A04,assumption,1,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+main_plane,template:A04,assumption,transverse,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+range_tag,template:A04,assumption,mid,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+rotation_complexity,template:A04,assumption,2,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_switch_count,template:A04,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+translation_distance_m,template:A04,assumption,0.0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+active_segments_json,template:A04,assumption,"[""S2"", ""S4"", ""S6""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_segments_json,template:A04,assumption,"[""S7"", ""S8"", ""S9"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+strike_segments_json,template:A04,assumption,"[""S6""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+impact_weight_json,template:A04,assumption,"{""S2"": 0.35, ""S4"": 0.2, ""S6"": 0.45}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+stability_weight_json,template:A04,assumption,"{""S2"": 0.65, ""S4"": 0.1, ""S6"": 0.25}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+theta_share_json,template:A04,assumption,"{""S2"": 0.35, ""S4"": 0.25, ""S6"": 0.4}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+laterality,template:A05,assumption,unilateral_lower,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+conditional_flag,template:A05,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+trigger_state,template:A05,assumption,standing,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_mode,template:A05,assumption,single_support,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+phase_count,template:A05,assumption,1,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+main_plane,template:A05,assumption,sagittal,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+range_tag,template:A05,assumption,mid,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+rotation_complexity,template:A05,assumption,1,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_switch_count,template:A05,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+translation_distance_m,template:A05,assumption,0.0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+active_segments_json,template:A05,assumption,"[""S2"", ""S8"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_segments_json,template:A05,assumption,"[""S7"", ""S9""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+strike_segments_json,template:A05,assumption,"[""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+impact_weight_json,template:A05,assumption,"{""S2"": 0.15, ""S8"": 0.3, ""S10"": 0.55}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+stability_weight_json,template:A05,assumption,"{""S2"": 0.5, ""S8"": 0.2, ""S10"": 0.3}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+theta_share_json,template:A05,assumption,"{""S2"": 0.1, ""S8"": 0.35, ""S10"": 0.55}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+laterality,template:A06,assumption,unilateral_lower,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+conditional_flag,template:A06,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+trigger_state,template:A06,assumption,standing,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_mode,template:A06,assumption,single_support,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+phase_count,template:A06,assumption,1,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+main_plane,template:A06,assumption,frontal,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+range_tag,template:A06,assumption,long,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+rotation_complexity,template:A06,assumption,2,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_switch_count,template:A06,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+translation_distance_m,template:A06,assumption,0.0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+active_segments_json,template:A06,assumption,"[""S2"", ""S8"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_segments_json,template:A06,assumption,"[""S7"", ""S9""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+strike_segments_json,template:A06,assumption,"[""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+impact_weight_json,template:A06,assumption,"{""S2"": 0.25, ""S8"": 0.25, ""S10"": 0.5}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+stability_weight_json,template:A06,assumption,"{""S2"": 0.55, ""S8"": 0.15, ""S10"": 0.3}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+theta_share_json,template:A06,assumption,"{""S2"": 0.25, ""S8"": 0.3, ""S10"": 0.45}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+laterality,template:A07,assumption,full_body,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+conditional_flag,template:A07,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+trigger_state,template:A07,assumption,standing,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_mode,template:A07,assumption,single_support_rotational,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+phase_count,template:A07,assumption,2,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+main_plane,template:A07,assumption,multi_plane,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+range_tag,template:A07,assumption,long,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+rotation_complexity,template:A07,assumption,3,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_switch_count,template:A07,assumption,1,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+translation_distance_m,template:A07,assumption,0.0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+active_segments_json,template:A07,assumption,"[""S2"", ""S7"", ""S8"", ""S9"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_segments_json,template:A07,assumption,"[""S7"", ""S9""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+strike_segments_json,template:A07,assumption,"[""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+impact_weight_json,template:A07,assumption,"{""S2"": 0.3, ""S7"": 0.1, ""S8"": 0.2, ""S9"": 0.1, ""S10"": 0.3}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+stability_weight_json,template:A07,assumption,"{""S2"": 0.45, ""S7"": 0.15, ""S8"": 0.15, ""S9"": 0.1, ""S10"": 0.15}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+theta_share_json,template:A07,assumption,"{""S2"": 0.35, ""S7"": 0.1, ""S8"": 0.2, ""S9"": 0.05, ""S10"": 0.3}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+laterality,template:A08,assumption,unilateral_lower,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+conditional_flag,template:A08,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+trigger_state,template:A08,assumption,standing,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_mode,template:A08,assumption,single_support,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+phase_count,template:A08,assumption,1,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+main_plane,template:A08,assumption,transverse,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+range_tag,template:A08,assumption,mid,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+rotation_complexity,template:A08,assumption,2,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_switch_count,template:A08,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+translation_distance_m,template:A08,assumption,0.0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+active_segments_json,template:A08,assumption,"[""S2"", ""S8"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_segments_json,template:A08,assumption,"[""S7"", ""S9""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+strike_segments_json,template:A08,assumption,"[""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+impact_weight_json,template:A08,assumption,"{""S2"": 0.1, ""S8"": 0.2, ""S10"": 0.7}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+stability_weight_json,template:A08,assumption,"{""S2"": 0.5, ""S8"": 0.15, ""S10"": 0.35}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+theta_share_json,template:A08,assumption,"{""S2"": 0.15, ""S8"": 0.25, ""S10"": 0.6}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+laterality,template:A09,assumption,unilateral_lower,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+conditional_flag,template:A09,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+trigger_state,template:A09,assumption,standing,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_mode,template:A09,assumption,quasi_single_support,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+phase_count,template:A09,assumption,1,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+main_plane,template:A09,assumption,sagittal,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+range_tag,template:A09,assumption,close,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+rotation_complexity,template:A09,assumption,1,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_switch_count,template:A09,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+translation_distance_m,template:A09,assumption,0.0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+active_segments_json,template:A09,assumption,"[""S2"", ""S8"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_segments_json,template:A09,assumption,"[""S7"", ""S9""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+strike_segments_json,template:A09,assumption,"[""S8""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+impact_weight_json,template:A09,assumption,"{""S2"": 0.2, ""S8"": 0.65, ""S10"": 0.15}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+stability_weight_json,template:A09,assumption,"{""S2"": 0.5, ""S8"": 0.35, ""S10"": 0.15}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+theta_share_json,template:A09,assumption,"{""S2"": 0.1, ""S8"": 0.7, ""S10"": 0.2}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+laterality,template:A10,assumption,upper_lower_combo,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+conditional_flag,template:A10,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+trigger_state,template:A10,assumption,standing,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_mode,template:A10,assumption,double_support,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+phase_count,template:A10,assumption,2,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+main_plane,template:A10,assumption,multi_plane,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+range_tag,template:A10,assumption,mid,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+rotation_complexity,template:A10,assumption,2,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_switch_count,template:A10,assumption,1,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+translation_distance_m,template:A10,assumption,0.0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+active_segments_json,template:A10,assumption,"[""S2"", ""S4"", ""S6"", ""S8"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_segments_json,template:A10,assumption,"[""S7"", ""S8"", ""S9"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+strike_segments_json,template:A10,assumption,"[""S6"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+impact_weight_json,template:A10,assumption,"{""S2"": 0.2, ""S4"": 0.1, ""S6"": 0.2, ""S8"": 0.2, ""S10"": 0.3}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+stability_weight_json,template:A10,assumption,"{""S2"": 0.4, ""S4"": 0.1, ""S6"": 0.15, ""S8"": 0.15, ""S10"": 0.2}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+theta_share_json,template:A10,assumption,"{""S2"": 0.15, ""S4"": 0.15, ""S6"": 0.2, ""S8"": 0.2, ""S10"": 0.3}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+laterality,template:A11,assumption,full_body,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+conditional_flag,template:A11,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+trigger_state,template:A11,assumption,standing,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_mode,template:A11,assumption,single_support,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+phase_count,template:A11,assumption,5,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+main_plane,template:A11,assumption,multi_plane,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+range_tag,template:A11,assumption,mid,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+rotation_complexity,template:A11,assumption,2,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_switch_count,template:A11,assumption,4,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+translation_distance_m,template:A11,assumption,0.0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+active_segments_json,template:A11,assumption,"[""S2"", ""S7"", ""S8"", ""S9"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_segments_json,template:A11,assumption,"[""S7"", ""S8"", ""S9"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+strike_segments_json,template:A11,assumption,"[""S9"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+impact_weight_json,template:A11,assumption,"{""S2"": 0.15, ""S7"": 0.1, ""S8"": 0.2, ""S9"": 0.15, ""S10"": 0.4}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+stability_weight_json,template:A11,assumption,"{""S2"": 0.35, ""S7"": 0.15, ""S8"": 0.15, ""S9"": 0.15, ""S10"": 0.2}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+theta_share_json,template:A11,assumption,"{""S2"": 0.1, ""S7"": 0.1, ""S8"": 0.2, ""S9"": 0.2, ""S10"": 0.4}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+laterality,template:A12,assumption,full_body,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+conditional_flag,template:A12,assumption,0,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+trigger_state,template:A12,assumption,standing,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_mode,template:A12,assumption,dynamic_double_support,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+phase_count,template:A12,assumption,3,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+main_plane,template:A12,assumption,sagittal,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+range_tag,template:A12,assumption,entry,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+rotation_complexity,template:A12,assumption,1,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_switch_count,template:A12,assumption,1,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+translation_distance_m,template:A12,assumption,0.6,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+active_segments_json,template:A12,assumption,"[""S2"", ""S7"", ""S8"", ""S9"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_segments_json,template:A12,assumption,"[""S7"", ""S8"", ""S9"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+strike_segments_json,template:A12,assumption,"[""S2""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+impact_weight_json,template:A12,assumption,"{""S2"": 0.6, ""S7"": 0.1, ""S8"": 0.1, ""S9"": 0.1, ""S10"": 0.1}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+stability_weight_json,template:A12,assumption,"{""S2"": 0.5, ""S7"": 0.1, ""S8"": 0.1, ""S9"": 0.15, ""S10"": 0.15}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+theta_share_json,template:A12,assumption,"{""S2"": 0.5, ""S7"": 0.15, ""S8"": 0.15, ""S9"": 0.1, ""S10"": 0.1}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+laterality,template:A13,assumption,conditional,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+conditional_flag,template:A13,assumption,1,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+trigger_state,template:A13,assumption,fallen,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_mode,template:A13,assumption,recovery_transition,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+phase_count,template:A13,assumption,2,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+main_plane,template:A13,assumption,multi_plane,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+range_tag,template:A13,assumption,ground,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+rotation_complexity,template:A13,assumption,3,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_switch_count,template:A13,assumption,1,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+translation_distance_m,template:A13,assumption,0.2,-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+active_segments_json,template:A13,assumption,"[""S2"", ""S4"", ""S6"", ""S7"", ""S8"", ""S9"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+support_segments_json,template:A13,assumption,"[""S4"", ""S6"", ""S7"", ""S8"", ""S9"", ""S10""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+strike_segments_json,template:A13,assumption,"[""S6""]",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+impact_weight_json,template:A13,assumption,"{""S2"": 0.2, ""S4"": 0.1, ""S6"": 0.2, ""S7"": 0.1, ""S8"": 0.15, ""S9"": 0.1, ""S10"": 0.15}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+stability_weight_json,template:A13,assumption,"{""S2"": 0.35, ""S4"": 0.05, ""S6"": 0.1, ""S7"": 0.15, ""S8"": 0.15, ""S9"": 0.1, ""S10"": 0.1}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+theta_share_json,template:A13,assumption,"{""S2"": 0.2, ""S4"": 0.1, ""S6"": 0.15, ""S7"": 0.15, ""S8"": 0.15, ""S9"": 0.1, ""S10"": 0.15}",-,q1_action_templates.csv,action_structure_template,动作结构模板字段。
+phase_time_ratio,phase:A03-P1,assumption,0.45,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：straight_entry
+phase_theta_deg,phase:A03-P1,assumption,45,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：straight_entry
+support_mode_phase,phase:A03-P1,assumption,double_support,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：straight_entry
+translation_share,phase:A03-P1,assumption,0.0,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：straight_entry
+active_segments_json,phase:A03-P1,assumption,"[""S2"", ""S4"", ""S6""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：straight_entry
+strike_segments_json,phase:A03-P1,assumption,"[""S6""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：straight_entry
+impact_weight_json,phase:A03-P1,assumption,"{""S2"": 0.15, ""S4"": 0.25, ""S6"": 0.6}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：straight_entry
+stability_weight_json,phase:A03-P1,assumption,"{""S2"": 0.5, ""S4"": 0.2, ""S6"": 0.3}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：straight_entry
+theta_share_json,phase:A03-P1,assumption,"{""S2"": 0.1, ""S4"": 0.35, ""S6"": 0.55}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：straight_entry
+phase_decay,phase:A03-P1,assumption,1.0,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：straight_entry
+phase_time_ratio,phase:A03-P2,assumption,0.55,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：hook_follow
+phase_theta_deg,phase:A03-P2,assumption,55,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：hook_follow
+support_mode_phase,phase:A03-P2,assumption,double_support,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：hook_follow
+translation_share,phase:A03-P2,assumption,0.0,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：hook_follow
+active_segments_json,phase:A03-P2,assumption,"[""S2"", ""S3"", ""S5""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：hook_follow
+strike_segments_json,phase:A03-P2,assumption,"[""S5""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：hook_follow
+impact_weight_json,phase:A03-P2,assumption,"{""S2"": 0.25, ""S3"": 0.25, ""S5"": 0.5}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：hook_follow
+stability_weight_json,phase:A03-P2,assumption,"{""S2"": 0.55, ""S3"": 0.15, ""S5"": 0.3}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：hook_follow
+theta_share_json,phase:A03-P2,assumption,"{""S2"": 0.25, ""S3"": 0.3, ""S5"": 0.45}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：hook_follow
+phase_decay,phase:A03-P2,assumption,0.95,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：hook_follow
+phase_time_ratio,phase:A07-P1,assumption,0.45,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：spin_load
+phase_theta_deg,phase:A07-P1,assumption,200,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：spin_load
+support_mode_phase,phase:A07-P1,assumption,single_support_rotational,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：spin_load
+translation_share,phase:A07-P1,assumption,0.0,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：spin_load
+active_segments_json,phase:A07-P1,assumption,"[""S2"", ""S7"", ""S9""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：spin_load
+strike_segments_json,phase:A07-P1,assumption,[],-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：spin_load
+impact_weight_json,phase:A07-P1,assumption,"{""S2"": 0.55, ""S7"": 0.25, ""S9"": 0.2}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：spin_load
+stability_weight_json,phase:A07-P1,assumption,"{""S2"": 0.5, ""S7"": 0.25, ""S9"": 0.25}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：spin_load
+theta_share_json,phase:A07-P1,assumption,"{""S2"": 0.6, ""S7"": 0.25, ""S9"": 0.15}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：spin_load
+phase_decay,phase:A07-P1,assumption,1.0,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：spin_load
+phase_time_ratio,phase:A07-P2,assumption,0.55,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_release
+phase_theta_deg,phase:A07-P2,assumption,180,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_release
+support_mode_phase,phase:A07-P2,assumption,single_support_rotational,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_release
+translation_share,phase:A07-P2,assumption,0.0,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_release
+active_segments_json,phase:A07-P2,assumption,"[""S2"", ""S8"", ""S10""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_release
+strike_segments_json,phase:A07-P2,assumption,"[""S10""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_release
+impact_weight_json,phase:A07-P2,assumption,"{""S2"": 0.25, ""S8"": 0.25, ""S10"": 0.5}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_release
+stability_weight_json,phase:A07-P2,assumption,"{""S2"": 0.45, ""S8"": 0.2, ""S10"": 0.35}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_release
+theta_share_json,phase:A07-P2,assumption,"{""S2"": 0.25, ""S8"": 0.3, ""S10"": 0.45}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_release
+phase_decay,phase:A07-P2,assumption,0.95,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_release
+phase_time_ratio,phase:A10-P1,assumption,0.4,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：punch_setup
+phase_theta_deg,phase:A10-P1,assumption,50,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：punch_setup
+support_mode_phase,phase:A10-P1,assumption,double_support,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：punch_setup
+translation_share,phase:A10-P1,assumption,0.0,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：punch_setup
+active_segments_json,phase:A10-P1,assumption,"[""S2"", ""S4"", ""S6""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：punch_setup
+strike_segments_json,phase:A10-P1,assumption,"[""S6""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：punch_setup
+impact_weight_json,phase:A10-P1,assumption,"{""S2"": 0.15, ""S4"": 0.25, ""S6"": 0.6}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：punch_setup
+stability_weight_json,phase:A10-P1,assumption,"{""S2"": 0.5, ""S4"": 0.2, ""S6"": 0.3}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：punch_setup
+theta_share_json,phase:A10-P1,assumption,"{""S2"": 0.1, ""S4"": 0.35, ""S6"": 0.55}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：punch_setup
+phase_decay,phase:A10-P1,assumption,1.0,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：punch_setup
+phase_time_ratio,phase:A10-P2,assumption,0.6,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_finish
+phase_theta_deg,phase:A10-P2,assumption,90,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_finish
+support_mode_phase,phase:A10-P2,assumption,single_support,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_finish
+translation_share,phase:A10-P2,assumption,0.0,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_finish
+active_segments_json,phase:A10-P2,assumption,"[""S2"", ""S8"", ""S10""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_finish
+strike_segments_json,phase:A10-P2,assumption,"[""S10""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_finish
+impact_weight_json,phase:A10-P2,assumption,"{""S2"": 0.15, ""S8"": 0.3, ""S10"": 0.55}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_finish
+stability_weight_json,phase:A10-P2,assumption,"{""S2"": 0.5, ""S8"": 0.2, ""S10"": 0.3}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_finish
+theta_share_json,phase:A10-P2,assumption,"{""S2"": 0.1, ""S8"": 0.35, ""S10"": 0.55}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_finish
+phase_decay,phase:A10-P2,assumption,0.92,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_finish
+phase_time_ratio,phase:A11-P1,assumption,0.2,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_1
+phase_theta_deg,phase:A11-P1,assumption,90,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_1
+support_mode_phase,phase:A11-P1,assumption,single_support,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_1
+translation_share,phase:A11-P1,assumption,0.0,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_1
+active_segments_json,phase:A11-P1,assumption,"[""S2"", ""S8"", ""S10""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_1
+strike_segments_json,phase:A11-P1,assumption,"[""S10""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_1
+impact_weight_json,phase:A11-P1,assumption,"{""S2"": 0.15, ""S8"": 0.3, ""S10"": 0.55}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_1
+stability_weight_json,phase:A11-P1,assumption,"{""S2"": 0.5, ""S8"": 0.2, ""S10"": 0.3}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_1
+theta_share_json,phase:A11-P1,assumption,"{""S2"": 0.1, ""S8"": 0.35, ""S10"": 0.55}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_1
+phase_decay,phase:A11-P1,assumption,1.0,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_1
+phase_time_ratio,phase:A11-P2,assumption,0.2,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_2
+phase_theta_deg,phase:A11-P2,assumption,90,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_2
+support_mode_phase,phase:A11-P2,assumption,single_support,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_2
+translation_share,phase:A11-P2,assumption,0.0,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_2
+active_segments_json,phase:A11-P2,assumption,"[""S2"", ""S7"", ""S9""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_2
+strike_segments_json,phase:A11-P2,assumption,"[""S9""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_2
+impact_weight_json,phase:A11-P2,assumption,"{""S2"": 0.15, ""S7"": 0.3, ""S9"": 0.55}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_2
+stability_weight_json,phase:A11-P2,assumption,"{""S2"": 0.5, ""S7"": 0.2, ""S9"": 0.3}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_2
+theta_share_json,phase:A11-P2,assumption,"{""S2"": 0.1, ""S7"": 0.35, ""S9"": 0.55}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_2
+phase_decay,phase:A11-P2,assumption,0.96,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_2
+phase_time_ratio,phase:A11-P3,assumption,0.2,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_3
+phase_theta_deg,phase:A11-P3,assumption,90,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_3
+support_mode_phase,phase:A11-P3,assumption,single_support,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_3
+translation_share,phase:A11-P3,assumption,0.0,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_3
+active_segments_json,phase:A11-P3,assumption,"[""S2"", ""S8"", ""S10""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_3
+strike_segments_json,phase:A11-P3,assumption,"[""S10""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_3
+impact_weight_json,phase:A11-P3,assumption,"{""S2"": 0.15, ""S8"": 0.3, ""S10"": 0.55}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_3
+stability_weight_json,phase:A11-P3,assumption,"{""S2"": 0.5, ""S8"": 0.2, ""S10"": 0.3}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_3
+theta_share_json,phase:A11-P3,assumption,"{""S2"": 0.1, ""S8"": 0.35, ""S10"": 0.55}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_3
+phase_decay,phase:A11-P3,assumption,0.92,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_3
+phase_time_ratio,phase:A11-P4,assumption,0.2,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_4
+phase_theta_deg,phase:A11-P4,assumption,90,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_4
+support_mode_phase,phase:A11-P4,assumption,single_support,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_4
+translation_share,phase:A11-P4,assumption,0.0,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_4
+active_segments_json,phase:A11-P4,assumption,"[""S2"", ""S7"", ""S9""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_4
+strike_segments_json,phase:A11-P4,assumption,"[""S9""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_4
+impact_weight_json,phase:A11-P4,assumption,"{""S2"": 0.15, ""S7"": 0.3, ""S9"": 0.55}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_4
+stability_weight_json,phase:A11-P4,assumption,"{""S2"": 0.5, ""S7"": 0.2, ""S9"": 0.3}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_4
+theta_share_json,phase:A11-P4,assumption,"{""S2"": 0.1, ""S7"": 0.35, ""S9"": 0.55}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_4
+phase_decay,phase:A11-P4,assumption,0.88,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_4
+phase_time_ratio,phase:A11-P5,assumption,0.2,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_5
+phase_theta_deg,phase:A11-P5,assumption,90,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_5
+support_mode_phase,phase:A11-P5,assumption,single_support,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_5
+translation_share,phase:A11-P5,assumption,0.0,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_5
+active_segments_json,phase:A11-P5,assumption,"[""S2"", ""S8"", ""S10""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_5
+strike_segments_json,phase:A11-P5,assumption,"[""S10""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_5
+impact_weight_json,phase:A11-P5,assumption,"{""S2"": 0.15, ""S8"": 0.3, ""S10"": 0.55}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_5
+stability_weight_json,phase:A11-P5,assumption,"{""S2"": 0.5, ""S8"": 0.2, ""S10"": 0.3}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_5
+theta_share_json,phase:A11-P5,assumption,"{""S2"": 0.1, ""S8"": 0.35, ""S10"": 0.55}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_5
+phase_decay,phase:A11-P5,assumption,0.84,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：kick_5
+phase_time_ratio,phase:A12-P1,assumption,0.45,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：approach_accel
+phase_theta_deg,phase:A12-P1,assumption,8,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：approach_accel
+support_mode_phase,phase:A12-P1,assumption,dynamic_double_support,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：approach_accel
+translation_share,phase:A12-P1,assumption,0.7,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：approach_accel
+active_segments_json,phase:A12-P1,assumption,"[""S2"", ""S7"", ""S8"", ""S9"", ""S10""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：approach_accel
+strike_segments_json,phase:A12-P1,assumption,[],-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：approach_accel
+impact_weight_json,phase:A12-P1,assumption,"{""S2"": 0.4, ""S7"": 0.15, ""S8"": 0.15, ""S9"": 0.15, ""S10"": 0.15}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：approach_accel
+stability_weight_json,phase:A12-P1,assumption,"{""S2"": 0.45, ""S7"": 0.1, ""S8"": 0.1, ""S9"": 0.175, ""S10"": 0.175}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：approach_accel
+theta_share_json,phase:A12-P1,assumption,"{""S2"": 0.5, ""S7"": 0.15, ""S8"": 0.15, ""S9"": 0.1, ""S10"": 0.1}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：approach_accel
+phase_decay,phase:A12-P1,assumption,1.0,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：approach_accel
+phase_time_ratio,phase:A12-P2,assumption,0.2,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：body_impact
+phase_theta_deg,phase:A12-P2,assumption,12,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：body_impact
+support_mode_phase,phase:A12-P2,assumption,dynamic_double_support,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：body_impact
+translation_share,phase:A12-P2,assumption,0.2,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：body_impact
+active_segments_json,phase:A12-P2,assumption,"[""S2"", ""S7"", ""S8"", ""S9"", ""S10""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：body_impact
+strike_segments_json,phase:A12-P2,assumption,"[""S2""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：body_impact
+impact_weight_json,phase:A12-P2,assumption,"{""S2"": 0.7, ""S7"": 0.075, ""S8"": 0.075, ""S9"": 0.075, ""S10"": 0.075}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：body_impact
+stability_weight_json,phase:A12-P2,assumption,"{""S2"": 0.5, ""S7"": 0.1, ""S8"": 0.1, ""S9"": 0.15, ""S10"": 0.15}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：body_impact
+theta_share_json,phase:A12-P2,assumption,"{""S2"": 0.6, ""S7"": 0.1, ""S8"": 0.1, ""S9"": 0.1, ""S10"": 0.1}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：body_impact
+phase_decay,phase:A12-P2,assumption,0.98,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：body_impact
+phase_time_ratio,phase:A12-P3,assumption,0.35,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：recovery_brake
+phase_theta_deg,phase:A12-P3,assumption,6,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：recovery_brake
+support_mode_phase,phase:A12-P3,assumption,dynamic_double_support,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：recovery_brake
+translation_share,phase:A12-P3,assumption,0.1,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：recovery_brake
+active_segments_json,phase:A12-P3,assumption,"[""S2"", ""S7"", ""S8"", ""S9"", ""S10""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：recovery_brake
+strike_segments_json,phase:A12-P3,assumption,[],-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：recovery_brake
+impact_weight_json,phase:A12-P3,assumption,"{""S2"": 0.3, ""S7"": 0.175, ""S8"": 0.175, ""S9"": 0.175, ""S10"": 0.175}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：recovery_brake
+stability_weight_json,phase:A12-P3,assumption,"{""S2"": 0.55, ""S7"": 0.1, ""S8"": 0.1, ""S9"": 0.125, ""S10"": 0.125}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：recovery_brake
+theta_share_json,phase:A12-P3,assumption,"{""S2"": 0.4, ""S7"": 0.15, ""S8"": 0.15, ""S9"": 0.15, ""S10"": 0.15}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：recovery_brake
+phase_decay,phase:A12-P3,assumption,0.9,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：recovery_brake
+phase_time_ratio,phase:A13-P1,assumption,0.6,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：getup_recovery
+phase_theta_deg,phase:A13-P1,assumption,70,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：getup_recovery
+support_mode_phase,phase:A13-P1,assumption,recovery_transition,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：getup_recovery
+translation_share,phase:A13-P1,assumption,0.6,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：getup_recovery
+active_segments_json,phase:A13-P1,assumption,"[""S2"", ""S4"", ""S6"", ""S7"", ""S8"", ""S9"", ""S10""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：getup_recovery
+strike_segments_json,phase:A13-P1,assumption,[],-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：getup_recovery
+impact_weight_json,phase:A13-P1,assumption,"{""S2"": 0.25, ""S4"": 0.05, ""S6"": 0.1, ""S7"": 0.15, ""S8"": 0.15, ""S9"": 0.15, ""S10"": 0.15}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：getup_recovery
+stability_weight_json,phase:A13-P1,assumption,"{""S2"": 0.35, ""S4"": 0.05, ""S6"": 0.1, ""S7"": 0.15, ""S8"": 0.15, ""S9"": 0.1, ""S10"": 0.1}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：getup_recovery
+theta_share_json,phase:A13-P1,assumption,"{""S2"": 0.25, ""S4"": 0.1, ""S6"": 0.1, ""S7"": 0.15, ""S8"": 0.15, ""S9"": 0.1, ""S10"": 0.15}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：getup_recovery
+phase_decay,phase:A13-P1,assumption,1.0,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：getup_recovery
+phase_time_ratio,phase:A13-P2,assumption,0.4,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：counter_strike
+phase_theta_deg,phase:A13-P2,assumption,50,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：counter_strike
+support_mode_phase,phase:A13-P2,assumption,quasi_single_support,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：counter_strike
+translation_share,phase:A13-P2,assumption,0.4,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：counter_strike
+active_segments_json,phase:A13-P2,assumption,"[""S2"", ""S4"", ""S6""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：counter_strike
+strike_segments_json,phase:A13-P2,assumption,"[""S6""]",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：counter_strike
+impact_weight_json,phase:A13-P2,assumption,"{""S2"": 0.2, ""S4"": 0.25, ""S6"": 0.55}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：counter_strike
+stability_weight_json,phase:A13-P2,assumption,"{""S2"": 0.5, ""S4"": 0.2, ""S6"": 0.3}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：counter_strike
+theta_share_json,phase:A13-P2,assumption,"{""S2"": 0.15, ""S4"": 0.3, ""S6"": 0.55}",-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：counter_strike
+phase_decay,phase:A13-P2,assumption,0.92,-,q1_action_phase_templates.csv,phase_template,动作相位模板字段：counter_strike
+support_depth_m,global_assumption,assumption,0.25266,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,前后支撑深度采用题解中的保守口径。
+foot_spacing_ratio,global_assumption,assumption,0.6,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,双脚内侧间距采用机体宽度的 60%。
+upper_com_ratio,global_assumption,assumption,0.45,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,整体质心高度采用上体高度的 45%。
+effective_speed_ratio,global_assumption,assumption,0.6,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,动作有效角速度取理论输出上限的 60%。
+average_torque_ratio,global_assumption,assumption,0.5,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,平均力矩取最大关节力矩的 50%。
+average_speed_ratio,global_assumption,assumption,0.4,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,平均角速度取输出轴理论上限的 40%。
+torso_eccentricity_m,global_assumption,assumption,0.15,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,躯干转体偏心半径采用 0.15m 的保守估计。
+body_charge_gamma,global_assumption,assumption,0.35,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,冲撞平动对质心偏移的折减系数。
+counter_recovery_gamma,global_assumption,assumption,0.15,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,倒地恢复平动对质心偏移的折减系数。
+dynamic_gravity_m_s2,global_assumption,assumption,9.81,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,重力加速度常数，用于 ZMP 近似与恢复功计算。
+exposure_time_ref_s,global_assumption,assumption,0.6,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,暴露指数的参考时间尺度。
+exposure_phase_alpha,global_assumption,assumption,0.15,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,多阶段动作的暴露累积系数。
+exposure_switch_beta,global_assumption,assumption,0.1,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,支撑切换次数对暴露的附加系数。
+rotation_exposure_beta,global_assumption,assumption,0.08,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,旋转复杂度对暴露的附加系数。
+reference_velocity_m_s,global_assumption,assumption,6.0,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,速度映射为得分潜力时的参考速度。
+velocity_sigmoid_scale,global_assumption,assumption,1.25,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,速度映射 Sigmoid 曲线的尺度参数。
+zmp_logistic_slope,global_assumption,assumption,8.0,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,ZMP 越界比率映射为跌倒风险时的 Logistic 斜率。
+support_amplify_factor,global_assumption,assumption,0.75,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,支撑模式对质心偏移的放大系数。
+translation_effect_default,global_assumption,assumption,0.2,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,非冲撞类平动动作对质心偏移的默认折减。
+phase_work_decay_default,global_assumption,assumption,0.96,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,多阶段动作暴露累积时的默认衰减因子。
+recovery_height_m,global_assumption,assumption,0.7,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,倒地反击起身阶段的恢复高度近似。
+recovery_efficiency,global_assumption,assumption,0.35,-,src/q1/model_v1.py,MODEL_ASSUMPTIONS,倒地恢复功的效率折减系数。
+torso_mass_ratio,legacy_compatibility,compatibility_assumption,0.42,-,src/q1/model_v1.py,LEGACY_COMPATIBILITY_ASSUMPTIONS,兼容 Q2 阶段中，用于树立防护和冲撞等旧问题质量口径。
+single_arm_mass_ratio,legacy_compatibility,compatibility_assumption,0.07,-,src/q1/model_v1.py,LEGACY_COMPATIBILITY_ASSUMPTIONS,兼容 Q2 防护有效支撑质量和上肢动作的遗留口径。
+single_leg_mass_ratio,legacy_compatibility,compatibility_assumption,0.15,-,src/q1/model_v1.py,LEGACY_COMPATIBILITY_ASSUMPTIONS,兼容 Q2 下肢攻防质量和步法动作的遗留口径。
+forearm_mass_ratio,legacy_compatibility,compatibility_assumption,0.45,-,src/q1/model_v1.py,LEGACY_COMPATIBILITY_ASSUMPTIONS,兼容 Q2 前臂受力质量估计的遗留参数。
+thigh_mass_ratio,legacy_compatibility,compatibility_assumption,0.54,-,src/q1/model_v1.py,LEGACY_COMPATIBILITY_ASSUMPTIONS,兼容 Q2 大腿受力质量估计的遗留参数。

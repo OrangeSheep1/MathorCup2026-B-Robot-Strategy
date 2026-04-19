@@ -1,0 +1,93 @@
+{
+  "generated_at": "2026-04-19T17:29:53",
+  "input_files": {
+    "robot": "E:\\Python Project\\6.Practical_project\\yt\\14\\16th_MathorCup\\MathorCup2026-B-Robot-Strategy\\data\\raw\\q1_robot_params.csv",
+    "segments": "E:\\Python Project\\6.Practical_project\\yt\\14\\16th_MathorCup\\MathorCup2026-B-Robot-Strategy\\data\\raw\\q1_segment_params.csv",
+    "support_modes": "E:\\Python Project\\6.Practical_project\\yt\\14\\16th_MathorCup\\MathorCup2026-B-Robot-Strategy\\data\\raw\\q1_support_mode_config.csv",
+    "action_sources": "E:\\Python Project\\6.Practical_project\\yt\\14\\16th_MathorCup\\MathorCup2026-B-Robot-Strategy\\data\\raw\\q1_attack_actions.csv",
+    "action_templates": "E:\\Python Project\\6.Practical_project\\yt\\14\\16th_MathorCup\\MathorCup2026-B-Robot-Strategy\\data\\raw\\q1_action_templates.csv",
+    "action_phases": "E:\\Python Project\\6.Practical_project\\yt\\14\\16th_MathorCup\\MathorCup2026-B-Robot-Strategy\\data\\raw\\q1_action_phase_templates.csv"
+  },
+  "output_files": {
+    "action_features": "E:\\Python Project\\6.Practical_project\\yt\\14\\16th_MathorCup\\MathorCup2026-B-Robot-Strategy\\data\\interim\\action_features.csv",
+    "parameter_registry": "E:\\Python Project\\6.Practical_project\\yt\\14\\16th_MathorCup\\MathorCup2026-B-Robot-Strategy\\data\\output\\q1_parameter_registry.csv",
+    "utility_figure": "E:\\Python Project\\6.Practical_project\\yt\\14\\16th_MathorCup\\MathorCup2026-B-Robot-Strategy\\data\\output\\q1_utility_bar.png",
+    "tradeoff_figure": "E:\\Python Project\\6.Practical_project\\yt\\14\\16th_MathorCup\\MathorCup2026-B-Robot-Strategy\\data\\output\\q1_impact_balance.png",
+    "method_compare_figure": "E:\\Python Project\\6.Practical_project\\yt\\14\\16th_MathorCup\\MathorCup2026-B-Robot-Strategy\\data\\output\\q1_method_comparison.png",
+    "penalty_figure": "E:\\Python Project\\6.Practical_project\\yt\\14\\16th_MathorCup\\MathorCup2026-B-Robot-Strategy\\data\\output\\q1_penalty_curve.png",
+    "sensitivity_figure": "E:\\Python Project\\6.Practical_project\\yt\\14\\16th_MathorCup\\MathorCup2026-B-Robot-Strategy\\data\\output\\q1_sensitivity_heatmap.png",
+    "decision_atlas_figure": "E:\\Python Project\\6.Practical_project\\yt\\14\\16th_MathorCup\\MathorCup2026-B-Robot-Strategy\\data\\output\\q1_decision_atlas.png"
+  },
+  "top5_actions": [
+    {
+      "action_id": "A04",
+      "action_name": "swing_punch",
+      "method4_score": 0.22561476984152934,
+      "method4_rank": 1
+    },
+    {
+      "action_id": "A06",
+      "action_name": "side_kick",
+      "method4_score": 0.09774015957811,
+      "method4_rank": 2
+    },
+    {
+      "action_id": "A01",
+      "action_name": "straight_punch",
+      "method4_score": 0.09750802652849201,
+      "method4_rank": 3
+    },
+    {
+      "action_id": "A02",
+      "action_name": "hook_punch",
+      "method4_score": 0.09516634857600818,
+      "method4_rank": 4
+    },
+    {
+      "action_id": "A09",
+      "action_name": "knee_strike",
+      "method4_score": 0.08311243277019537,
+      "method4_rank": 5
+    }
+  ],
+  "ahp_summary": {
+    "w_impact": 0.2843780848452431,
+    "w_stability": 0.47286200258634237,
+    "w_score": 0.16990098090114977,
+    "w_efficiency": 0.07285893166726488,
+    "lambda_max": 4.051109547476949,
+    "ci": 0.0170365158256498,
+    "cr": 0.018929462028499777
+  },
+  "model_assumptions": {
+    "support_depth_m": 0.25266,
+    "foot_spacing_ratio": 0.6,
+    "upper_com_ratio": 0.45,
+    "effective_speed_ratio": 0.6,
+    "average_torque_ratio": 0.5,
+    "average_speed_ratio": 0.4,
+    "torso_eccentricity_m": 0.15,
+    "body_charge_gamma": 0.35,
+    "counter_recovery_gamma": 0.15,
+    "dynamic_gravity_m_s2": 9.81,
+    "exposure_time_ref_s": 0.6,
+    "exposure_phase_alpha": 0.15,
+    "exposure_switch_beta": 0.1,
+    "rotation_exposure_beta": 0.08,
+    "reference_velocity_m_s": 6.0,
+    "velocity_sigmoid_scale": 1.25,
+    "zmp_logistic_slope": 8.0,
+    "support_amplify_factor": 0.75,
+    "translation_effect_default": 0.2,
+    "phase_work_decay_default": 0.96,
+    "recovery_height_m": 0.7,
+    "recovery_efficiency": 0.35
+  },
+  "legacy_compatibility_assumptions": {
+    "torso_mass_ratio": 0.42,
+    "single_arm_mass_ratio": 0.07,
+    "single_leg_mass_ratio": 0.15,
+    "forearm_mass_ratio": 0.45,
+    "thigh_mass_ratio": 0.54
+  }
+}

@@ -1,0 +1,11 @@
+segment_id,segment_name_cn,segment_name_en,side,parent_id,mass_ratio,mass_kg,length_basis,length_ratio,length_m,com_local_ratio,inertia_coeff,attack_capable,stability_role,remarks
+S1,头颈,head_neck,center,S2,0.0800,3.3600,total_height,0.1300,0.1820,0.5000,0.2500,0,0,主要用于整体质心估计
+S2,躯干,torso,center,,0.4800,20.1600,total_height,0.3796,0.5315,0.5000,0.3000,1,1,作为上肢链和下肢链的主根节段
+S3,左上臂,left_upper_arm,left,S2,0.0385,1.6170,arm_length,0.4700,0.3384,0.4360,0.3300,1,0,左侧上肢驱动段
+S4,右上臂,right_upper_arm,right,S2,0.0385,1.6170,arm_length,0.4700,0.3384,0.4360,0.3300,1,0,右侧上肢驱动段
+S5,左前臂手,left_forearm_hand,left,S3,0.0315,1.3230,arm_length,0.5300,0.3816,0.4300,0.3300,1,0,左侧末端打击段
+S6,右前臂手,right_forearm_hand,right,S4,0.0315,1.3230,arm_length,0.5300,0.3816,0.4300,0.3300,1,0,右侧末端打击段
+S7,左大腿,left_thigh,left,S2,0.0810,3.4020,leg_length,0.5400,0.3707,0.4330,0.3300,1,1,左侧近端腿段
+S8,右大腿,right_thigh,right,S2,0.0810,3.4020,leg_length,0.5400,0.3707,0.4330,0.3300,1,1,右侧近端腿段
+S9,左小腿足,left_shank_foot,left,S7,0.0690,2.8980,leg_length,0.4600,0.3158,0.4330,0.3300,1,1,左侧末端腿段
+S10,右小腿足,right_shank_foot,right,S8,0.0690,2.8980,leg_length,0.4600,0.3158,0.4330,0.3300,1,1,右侧末端腿段
