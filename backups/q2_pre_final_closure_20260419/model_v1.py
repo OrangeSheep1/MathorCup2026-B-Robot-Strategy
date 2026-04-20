@@ -88,7 +88,6 @@ DEFENSE_COLUMNS = [
     "contact_mode",
     "support_mode_def",
     "route_type",
-    "mechanism_tag",
     "primary_joint_group",
     "primary_angle_deg",
     "secondary_joint_group",
@@ -100,8 +99,6 @@ DEFENSE_COLUMNS = [
     "active_segments_json",
     "support_segments_json",
     "counter_readiness_tag",
-    "generic_scope_level",
-    "generic_scope_penalty",
     "source_type",
     "description",
     "force_capacity_basis",
@@ -117,15 +114,6 @@ ROUTE_COLUMNS = [
     "route_bonus",
     "clearance_need_ratio",
     "route_source",
-    "notes",
-]
-
-FAMILY_COMPAT_COLUMNS = [
-    "contact_load_family",
-    "mechanism_tag",
-    "family_success_factor",
-    "family_damage_factor",
-    "source_type",
     "notes",
 ]
 
@@ -160,7 +148,6 @@ DEFENSE_ROLE_VALUES = {
     "recovery_only",
     "emergency_transition",
 }
-GENERIC_SCOPE_VALUES = {"local", "semi_generic", "generic"}
 
 COUNTER_UNLOCK_VALUES = {"immediate", "after_first_break", "after_main_contact", "after_full_chain", "disabled"}
 ENTRY_STATE_VALUES = {"standing", "fallen", "any"}
@@ -265,7 +252,7 @@ NON_DIRECT_ROUTES = {
 DEFAULT_ROUTE_RULE = {
     "evade_lateral": (0.60, 0.30),
     "evade_back": (0.52, 0.42),
-    "evade_orbit": (0.54, 0.50),
+    "evade_orbit": (0.58, 0.34),
     "evade_spin": (0.52, 0.38),
     "evade_duck": (0.48, 0.26),
     "balance_step": (0.58, 0.24),
@@ -358,12 +345,6 @@ def load_defense_actions(file_path: str | Path) -> pd.DataFrame:
     recovery_mask = data["defense_role"].isin(["recovery_only", "ground_only"])
     if not data.loc[recovery_mask, "is_primary_candidate"].eq(0).all():
         raise ValueError("recovery_only and ground_only defenses cannot be primary candidates")
-    if data["mechanism_tag"].astype(str).str.strip().eq("").any():
-        raise ValueError("mechanism_tag cannot be empty")
-    if not data["generic_scope_level"].astype(str).isin(GENERIC_SCOPE_VALUES).all():
-        raise ValueError("invalid generic_scope_level detected")
-    if ((data["generic_scope_penalty"] < 0.0) | (data["generic_scope_penalty"] > 1.0)).any():
-        raise ValueError("generic_scope_penalty must lie in [0, 1]")
     data["sequence_ids"] = data["sequence_ids"].fillna("").astype(str)
     return data[DEFENSE_COLUMNS].copy()
 
@@ -378,18 +359,6 @@ def load_route_advantage(file_path: str | Path) -> pd.DataFrame:
     if data.duplicated(subset=["trajectory_type", "contact_mode_attack", "direction_tag", "range_tag", "route_type"]).any():
         raise ValueError("q2_route_advantage.csv contains duplicated route rules")
     return data[ROUTE_COLUMNS].copy()
-
-
-def load_family_compatibility(file_path: str | Path) -> pd.DataFrame:
-    data = pd.read_csv(file_path)
-    _require_columns(data, FAMILY_COMPAT_COLUMNS, "Q2 family compatibility table")
-    if ((data["family_success_factor"] < 0.0) | (data["family_success_factor"] > 1.0)).any():
-        raise ValueError("family_success_factor must lie in [0, 1]")
-    if ((data["family_damage_factor"] < 0.0) | (data["family_damage_factor"] > 1.0)).any():
-        raise ValueError("family_damage_factor must lie in [0, 1]")
-    if data.duplicated(subset=["contact_load_family", "mechanism_tag"]).any():
-        raise ValueError("q2_family_compatibility.csv contains duplicated family rules")
-    return data[FAMILY_COMPAT_COLUMNS].copy()
 
 
 def _token_set(tag: str) -> set[str]:
@@ -609,7 +578,6 @@ def build_attack_catalog(
                 "attack_primary_plane": str(row["primary_plane"]),
                 "attack_entry_state": str(row["attack_entry_state"]),
                 "attack_trigger_state": str(row["attack_trigger_state"]),
-                "defender_entry_state": _defender_entry_state_for_attack(row),
                 "semantic_source_type": str(row["semantic_source_type"]),
                 "contact_phase_policy": str(row["contact_phase_policy"]),
                 "contact_phase_no": int(contact_phase["phase_no"]),
@@ -623,9 +591,7 @@ def build_attack_catalog(
                 "contact_active_segments_json": json.dumps(list(contact_phase["active_segments_json"]), ensure_ascii=True),
                 "contact_reach_m": float(contact_reach_m),
                 "contact_load_family": _contact_load_family(row),
-                "contact_window_type": _contact_window_type(row),
                 "contact_plane": str(row["primary_plane"]),
-                "attack_response_audit": _attack_response_audit(row),
                 "recover_phase_policy": str(row["recover_phase_policy"]),
                 "recover_delay_base_s": float(row["recover_delay_base_s"]),
                 "recover_switch_coeff": float(row["recover_switch_coeff"]),
@@ -633,7 +599,6 @@ def build_attack_catalog(
                 "recover_risk_coeff": float(row["recover_risk_coeff"]),
                 "counter_unlock_mode": str(row["counter_unlock_mode"]),
                 "counter_unlock_coeff": float(row["counter_unlock_coeff"]),
-                "counter_unlock_audit": f"{str(row['counter_unlock_mode'])}:{float(row['counter_unlock_coeff']):.2f}",
                 "response_policy_source": str(row["response_policy_source"]),
                 "t_contact": t_contact,
                 "t_end": exec_time,
@@ -691,41 +656,6 @@ def _contact_load_family(attack_row: pd.Series) -> str:
         "conditional_contact": "ground_conditional",
     }
     return mapping.get(str(attack_row["contact_mode_attack"]), "generic")
-
-
-def _attack_response_audit(attack_row: pd.Series) -> str:
-    if str(attack_row["attack_entry_state"]) == "fallen" or int(attack_row.get("conditional_flag", 0)) == 1:
-        return "ground_conditional"
-    if str(attack_row["trajectory_type"]) == "sequence":
-        return "multi_contact_chain"
-    if str(attack_row["trajectory_type"]) == "rush":
-        return "rush_heavy"
-    if str(attack_row["trajectory_type"]) == "spin" or str(attack_row["direction_tag"]) == "spin":
-        return "spin_wide"
-    return "normal"
-
-
-def _contact_window_type(attack_row: pd.Series) -> str:
-    contact_load_family = _contact_load_family(attack_row)
-    if contact_load_family == "sequence_chain":
-        return "chained_contact"
-    if contact_load_family == "torso_drive":
-        return "sustained_contact"
-    if contact_load_family == "ground_conditional":
-        return "conditional_contact"
-    return "point_contact"
-
-
-def _defender_entry_state_for_attack(attack_row: pd.Series) -> str:
-    """Infer the defender's initial state for an incoming attack.
-
-    `attack_entry_state` describes the attacker's trigger state. For A13
-    (counter after fall), the attacker is fallen, but the defender normally
-    remains standing and should still be allowed to choose standing defenses.
-    """
-    if str(attack_row["attack_entry_state"]) == "fallen":
-        return "standing"
-    return "standing"
 
 
 def _weighted_average(values: list[float], weights: list[float]) -> float:
@@ -919,7 +849,6 @@ def _compute_defense_feature(
         "contact_mode": str(row["contact_mode"]),
         "support_mode_def": str(row["support_mode_def"]),
         "route_type": str(row["route_type"]),
-        "mechanism_tag": str(row["mechanism_tag"]),
         "primary_joint_group": str(row["primary_joint_group"]),
         "primary_angle_deg": 0.0 if pd.isna(row["primary_angle_deg"]) else float(row["primary_angle_deg"]),
         "secondary_joint_group": "" if pd.isna(row["secondary_joint_group"]) else str(row["secondary_joint_group"]),
@@ -932,7 +861,6 @@ def _compute_defense_feature(
         "J_cap": float(j_cap),
         "E_cap": float(e_cap),
         "absorb_base": float(absorb_base),
-        "absorb_rate": float(absorb_base),
         "clear_back_m": float(clear_back_m),
         "clear_lateral_m": float(clear_lateral_m),
         "clear_orbit_m": float(clear_orbit_m),
@@ -940,7 +868,6 @@ def _compute_defense_feature(
         "postdef_delay_s": float(postdef_delay),
         "counter_readiness_tag": str(row["counter_readiness_tag"]),
         "force_capacity_factor": float(force_capacity_factor),
-        "force_capacity": float(j_cap),
         "force_capacity_factor_input": raw_force_input,
         "force_capacity_factor_delta": np.nan if pd.isna(raw_force_input) else float(force_capacity_factor - raw_force_input),
         "contact_stiffness_ratio": float(contact_stiffness_ratio),
@@ -1013,15 +940,15 @@ def _lookup_route_rule(
     attack_row: pd.Series,
     defense_row: pd.Series,
     route_advantage: pd.DataFrame,
-) -> tuple[float, float, bool, int, str]:
+) -> tuple[float, float]:
     route_type = str(defense_row["route_type"])
     if route_type not in NON_DIRECT_ROUTES:
-        return 1.0, 0.0, True, 4, "direct_bypass"
+        return 1.0, 0.0
 
     candidates = route_advantage[route_advantage["route_type"] == route_type].copy()
     default_bonus, default_clearance = DEFAULT_ROUTE_RULE.get(route_type, (0.55, 0.0))
     if candidates.empty:
-        return float(default_bonus), float(default_clearance), False, 0, "default_like"
+        return float(default_bonus), float(default_clearance)
 
     best_bonus = float(default_bonus)
     best_clearance = float(default_clearance)
@@ -1042,30 +969,7 @@ def _lookup_route_rule(
             best_specificity = specificity
             best_bonus = float(candidate["route_bonus"])
             best_clearance = float(candidate["clearance_need_ratio"])
-    if best_specificity < 0:
-        return float(best_bonus), float(best_clearance), False, 0, "default_like"
-    if best_specificity >= 4:
-        specificity_note = "exact_match"
-    elif best_specificity >= 2:
-        specificity_note = "semi_generic"
-    else:
-        specificity_note = "weak_generic"
-    return float(best_bonus), float(best_clearance), True, int(best_specificity), specificity_note
-
-
-def _lookup_family_rule(
-    attack_row: pd.Series,
-    defense_row: pd.Series,
-    family_compatibility: pd.DataFrame,
-) -> tuple[float, float, bool]:
-    subset = family_compatibility[
-        (family_compatibility["contact_load_family"] == str(attack_row["contact_load_family"]))
-        & (family_compatibility["mechanism_tag"] == str(defense_row["mechanism_tag"]))
-    ]
-    if subset.empty:
-        return 0.35, 0.25, False
-    picked = subset.iloc[0]
-    return float(picked["family_success_factor"]), float(picked["family_damage_factor"]), True
+    return float(best_bonus), float(best_clearance)
 
 
 def _geo_components(attack_row: pd.Series, defense_row: pd.Series) -> tuple[float, float, float, float]:
@@ -1074,36 +978,6 @@ def _geo_components(attack_row: pd.Series, defense_row: pd.Series) -> tuple[floa
     range_score = _range_score(str(attack_row["range_tag"]), str(defense_row["coverage_range"]))
     zone_score = _zone_score(str(attack_row["target_zone"]), str(defense_row["coverage_target_zone"]))
     return direction_score, height_score, range_score, zone_score
-
-
-def _apply_geo_caps(
-    attack_row: pd.Series,
-    defense_row: pd.Series,
-    direction_score: float,
-    height_score: float,
-    range_score: float,
-    zone_score: float,
-) -> tuple[float, float, float, float, bool, str]:
-    contact_load_family = str(attack_row["contact_load_family"])
-    mechanism_tag = str(defense_row["mechanism_tag"])
-    cap_reasons: list[str] = []
-    if str(attack_row["trajectory_type"]) == "arc" and mechanism_tag in {"rigid_high_cross", "rigid_high_parry"}:
-        direction_score = min(direction_score, 0.35)
-        zone_score = min(zone_score, 0.60)
-        cap_reasons.append("arc_vs_high_rigid")
-    if contact_load_family == "lower_terminal" and mechanism_tag in {"rigid_high_cross", "rigid_high_parry", "posture_high_cover"}:
-        height_score = min(height_score, 0.2)
-        zone_score = min(zone_score, 0.2)
-        cap_reasons.append("lower_terminal_vs_high_guard")
-    if contact_load_family == "sweep_line" and mechanism_tag == "evade_duck":
-        height_score = min(height_score, 0.1)
-        zone_score = min(zone_score, 0.1)
-        cap_reasons.append("sweep_vs_duck")
-    if contact_load_family == "torso_drive" and mechanism_tag in {"rigid_high_cross", "rigid_high_parry", "rigid_close_elbow"}:
-        range_score = min(range_score, 0.2)
-        zone_score = min(zone_score, 0.2)
-        cap_reasons.append("torso_drive_vs_rigid_line")
-    return direction_score, height_score, range_score, zone_score, bool(cap_reasons), "|".join(cap_reasons)
 
 
 def _clear_distance_for_route(row: pd.Series) -> float:
@@ -1172,7 +1046,6 @@ def build_pair_matrix(
     attack_catalog: pd.DataFrame,
     defense_features: pd.DataFrame,
     route_advantage: pd.DataFrame,
-    family_compatibility: pd.DataFrame,
     robot: RobotParams,
 ) -> pd.DataFrame:
     attacks = attack_catalog.copy()
@@ -1188,24 +1061,17 @@ def build_pair_matrix(
     records: list[dict[str, Any]] = []
     for _, row in pair_matrix.iterrows():
         direction_score, height_score, range_score, zone_score = _geo_components(row, row)
-        direction_score, height_score, range_score, zone_score, geo_cap_applied, geo_cap_reason = _apply_geo_caps(
-            row,
-            row,
-            direction_score,
-            height_score,
-            range_score,
-            zone_score,
-        )
         attack_entry_state = str(row["attack_entry_state"])
-        defender_entry_state = str(row.get("defender_entry_state", "standing"))
         defense_entry_state = str(row["entry_state"])
         defense_role = str(row["defense_role"])
-        state_feasible = defense_entry_state in {defender_entry_state, "any"}
+        state_feasible = defense_entry_state in {attack_entry_state, "any"}
         active_primary_feasible = (
             state_feasible
             and bool(int(row["is_primary_candidate"]))
             and defense_role in {"active_primary", "active_combo"}
         )
+        if attack_entry_state == "fallen":
+            active_primary_feasible = False
         fallback_feasible = state_feasible and defense_role in {"fallback_mitigation", "emergency_transition"}
         ground_feasible = state_feasible and defense_role == "ground_only"
         recovery_feasible = state_feasible and defense_role == "recovery_only"
@@ -1215,17 +1081,7 @@ def build_pair_matrix(
             geo_score = 0.0
 
         p_react = _sigmoid((float(row["t_contact"]) - float(row["exec_time_def"])) / reaction_scale)
-        p_route, clearance_need_ratio, route_rule_hit, route_rule_specificity, route_rule_specificity_note = _lookup_route_rule(
-            row, row, route_advantage
-        )
-        p_family, family_damage_factor, family_rule_hit = _lookup_family_rule(row, row, family_compatibility)
-        contact_load_family = str(row["contact_load_family"])
-        mechanism_tag = str(row["mechanism_tag"])
-        if contact_load_family == "sweep_line" and mechanism_tag == "evade_duck":
-            p_family = min(p_family, 0.02)
-        if contact_load_family == "torso_drive" and mechanism_tag in {"rigid_high_cross", "rigid_high_parry", "rigid_close_elbow"}:
-            p_family = min(p_family, 0.12)
-            family_damage_factor = min(family_damage_factor, 0.10)
+        p_route, clearance_need_ratio = _lookup_route_rule(row, row, route_advantage)
         p_load_j = _sigmoid((float(row["J_cap"]) - float(row["impact_impulse"])) / s_j) if float(row["J_cap"]) > 0.0 else 0.0
         p_load_e = _sigmoid((float(row["E_cap"]) - float(row["impact_kinetic"])) / s_e) if float(row["E_cap"]) > 0.0 else 0.0
         p_load = 0.5 * p_load_j + 0.5 * p_load_e
@@ -1235,78 +1091,50 @@ def build_pair_matrix(
             p_clear = 1.0
         else:
             p_clear = _sigmoid((d_clear - d_need) / Q2_MODEL_ASSUMPTIONS["clearance_sigmoid_scale_m"])
-        if contact_load_family == "sweep_line" and mechanism_tag == "evade_duck":
-            p_clear = min(p_clear, 0.05)
 
         contact_mode = str(row["contact_mode"])
-        effective_absorb = 0.0
         if contact_mode == "none":
-            success_core = p_route * p_clear
-            p_success = geo_score * p_react * success_core * p_family
-            damage_core = geo_score * p_react * success_core * family_damage_factor
-            residual_damage = float(row["H_attack"]) * (1.0 - damage_core)
-            effective_absorb = float(success_core * family_damage_factor)
+            p_success = geo_score * p_react * p_route * p_clear
+            residual_damage = float(row["H_attack"]) * (1.0 - p_success)
         elif contact_mode == "composite":
-            success_core = 0.45 * p_route + 0.35 * p_load + 0.20 * p_clear
-            p_success = geo_score * p_react * success_core * p_family
+            p_success = geo_score * p_react * (0.45 * p_route + 0.35 * p_load + 0.20 * p_clear)
             absorb_pair = 0.50 * float(row["absorb_base"]) + 0.30 * p_load + 0.20 * p_clear
-            effective_absorb = absorb_pair * family_damage_factor
             residual_damage = float(row["H_attack"]) * (
                 1.0
                 - geo_score
                 * p_react
-                * (0.35 + 0.65 * effective_absorb)
+                * (0.35 + 0.65 * absorb_pair)
             )
         elif contact_mode == "rigid":
-            success_core = p_load
-            p_success = geo_score * p_react * success_core * p_family
+            p_success = geo_score * p_react * p_load
             absorb_pair = 0.35 * float(row["absorb_base"]) + 0.65 * p_load
-            effective_absorb = absorb_pair * family_damage_factor
             residual_damage = float(row["H_attack"]) * (
-                1.0 - geo_score * p_react * (0.40 + 0.60 * effective_absorb)
+                1.0 - geo_score * p_react * (0.40 + 0.60 * absorb_pair)
             )
         elif contact_mode == "passive":
-            success_core = 0.45 * p_load + 0.55 * float(row["absorb_base"])
-            p_success = geo_score * p_react * success_core * p_family
+            p_success = geo_score * p_react * (0.45 * p_load + 0.55 * float(row["absorb_base"]))
             absorb_pair = 0.55 * float(row["absorb_base"]) + 0.45 * p_load
-            effective_absorb = absorb_pair * family_damage_factor
             residual_damage = float(row["H_attack"]) * (
-                1.0 - geo_score * p_react * (0.35 + 0.65 * effective_absorb)
+                1.0 - geo_score * p_react * (0.35 + 0.65 * absorb_pair)
             )
         elif contact_mode == "soft":
-            success_core = 0.55 * p_route + 0.45 * float(row["absorb_base"])
-            p_success = geo_score * p_react * success_core * p_family
+            p_success = geo_score * p_react * (0.55 * p_route + 0.45 * float(row["absorb_base"]))
             absorb_pair = 0.80 * float(row["absorb_base"]) + 0.20 * p_load
-            effective_absorb = absorb_pair * family_damage_factor
             residual_damage = float(row["H_attack"]) * (
-                1.0 - geo_score * p_react * (0.30 + 0.70 * effective_absorb)
+                1.0 - geo_score * p_react * (0.30 + 0.70 * absorb_pair)
             )
         elif contact_mode == "ground":
-            success_core = 0.40 * p_route + 0.60 * float(row["absorb_base"])
-            p_success = geo_score * p_react * success_core * p_family
+            p_success = geo_score * p_react * (0.40 * p_route + 0.60 * float(row["absorb_base"]))
             absorb_pair = 0.70 * float(row["absorb_base"]) + 0.30 * p_load
-            effective_absorb = absorb_pair * family_damage_factor
             residual_damage = float(row["H_attack"]) * (
-                1.0 - geo_score * p_react * (0.30 + 0.70 * effective_absorb)
+                1.0 - geo_score * p_react * (0.30 + 0.70 * absorb_pair)
             )
         else:
-            success_core = p_load
-            p_success = geo_score * p_react * success_core * p_family
+            p_success = geo_score * p_react * p_load
             absorb_pair = 0.35 * float(row["absorb_base"]) + 0.65 * p_load
-            effective_absorb = absorb_pair * family_damage_factor
             residual_damage = float(row["H_attack"]) * (
-                1.0 - geo_score * p_react * (0.40 + 0.60 * effective_absorb)
+                1.0 - geo_score * p_react * (0.40 + 0.60 * absorb_pair)
             )
-
-        pair_audit_flag = "normal"
-        if not state_feasible:
-            pair_audit_flag = "invalid_state"
-        elif not family_rule_hit:
-            pair_audit_flag = "missing_family_rule"
-        elif str(row["route_type"]) in NON_DIRECT_ROUTES and not route_rule_hit:
-            pair_audit_flag = "missing_route_rule"
-        elif geo_cap_applied:
-            pair_audit_flag = "capped"
 
         p_success = float(np.clip(p_success if direct_role_feasible else 0.0, 0.0, 1.0))
         residual_damage = float(np.clip(residual_damage, 0.0, 1.0))
@@ -1345,8 +1173,6 @@ def build_pair_matrix(
             {
                 **row.to_dict(),
                 "state_feasible": bool(state_feasible),
-                "attacker_entry_state": attack_entry_state,
-                "defender_entry_state": defender_entry_state,
                 "active_primary_feasible": bool(active_primary_feasible),
                 "fallback_feasible": bool(fallback_feasible),
                 "ground_feasible": bool(ground_feasible),
@@ -1359,15 +1185,8 @@ def build_pair_matrix(
                 "zone_match": float(zone_score),
                 "p_geo": float(geo_score),
                 "geo_covered": bool(geo_score > 0.0),
-                "geo_cap_applied": bool(geo_cap_applied),
-                "geo_cap_reason": geo_cap_reason,
                 "p_react": float(p_react),
                 "p_route": float(p_route),
-                "route_rule_hit": bool(route_rule_hit),
-                "route_rule_specificity": int(route_rule_specificity),
-                "route_rule_specificity_note": route_rule_specificity_note,
-                "p_family": float(p_family),
-                "family_rule_hit": bool(family_rule_hit),
                 "d_need": float(d_need),
                 "d_clear": float(d_clear),
                 "p_clear": float(p_clear),
@@ -1375,14 +1194,10 @@ def build_pair_matrix(
                 "p_load_j": float(p_load_j),
                 "p_load_e": float(p_load_e),
                 "p_load": float(p_load),
-                "success_core": float(success_core),
-                "effective_absorb": float(effective_absorb),
-                "family_damage_factor": float(family_damage_factor),
                 "p_success": float(p_success),
                 "residual_damage": float(residual_damage),
                 "defense_damage": float(residual_damage),
                 "p_fall": float(p_fall),
-                "pair_audit_flag": pair_audit_flag,
                 "base_counter_window": float(base_window),
                 "counter_window": float(counter_window),
                 "counter_ready": int(counter_ready),

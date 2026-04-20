@@ -1,0 +1,12 @@
+﻿check_id,passed,detail
+A13_has_standing_response,True,active=D05
+A13_not_forced_to_ground_layer,True,"ground=, recovery="
+A05_not_D02,True,active=D05
+A12_not_D01,True,active=D06
+A11_active_combo_not_blank,True,active=D22
+active_not_monopolized,True,max_active_count=3
+active_category_diversity,True,"active_categories=['block', 'combo', 'evade']"
+posture_balance_outside_active,True,unexpected_active=[]
+ground_recovery_layer_isolated,True,ground/recovery roles only appear in their corresponding layers
+final_active_rule_coverage,True,"family_hit_rate=1.000, route_hit_rate=1.000"
+A13_baseline_methods_not_blank,True,"A13_method1=D05, A13_method2=D05, A13_method3=D05"

@@ -1,0 +1,4 @@
+﻿layer_name,pair_count,family_rule_hit_pairs,route_relevant_pairs,route_rule_hit_pairs,geo_cap_applied_pairs,non_normal_pair_count,family_rule_hit_rate,route_rule_hit_rate,geo_cap_applied_rate,non_normal_pair_rate
+active_top1,13,13,6,6,0,0,1.0,1.0,0.0,0.0
+fallback_top1,13,13,11,11,0,0,1.0,1.0,0.0,0.0
+ground_top1,0,0,0,0,0,0,0.0,1.0,0.0,0.0

@@ -1,530 +1,591 @@
-# Q2 当前实现说明（写作者阅览版）
+# Q2 Writer Guide
 
-## 1. 当前运行逻辑
+## 1. 当前 Q2 的最终定位
+当前 Q2 已经从“静态攻防评分表”收口为：
 
-Q2 当前的实际执行链路如下：
+> 基于 Q1 相位化攻击模型的分层攻防响应模型。
 
-1. 运行入口：`python scripts/run_q2.py`
-2. `scripts/run_q2.py` 调用 `src/q2/pipeline.py`
-3. `pipeline.py` 读取 4 份输入：
-   - `data/raw/q1_robot_params.csv`
-   - `data/interim/action_features.csv`
-   - `data/raw/q2_attack_semantics.csv`
-   - `data/raw/q2_defense_actions.csv`
-4. `pipeline.py` 调用 `src/q2/model_v1.py`
-   - 继承 Q1 的攻击特征
-   - 读取攻击语义标签和 22 种防守动作元数据
-   - 计算防守特征表 `defense_features`
-   - 计算 13×22 攻防对基础矩阵 `pair_matrix`
-5. `pipeline.py` 调用 `src/q2/evaluate.py`
-   - 计算方法一、方法二、方法三、方法四的得分和排名
-   - 进行闭环约束筛选
-   - 输出供 Q3 复用的防守匹配表和反击链表
-6. `pipeline.py` 保存中间结果：
-   - `data/interim/defense_features.csv`
-   - `data/interim/defense_pair_scores.csv`
-   - `data/interim/defense_matchup.csv`
-   - `data/interim/counter_chain.csv`
-   - `data/interim/q2_method_summary.csv`
-7. `pipeline.py` 调用 `src/q2/plot.py`
-   - 输出 5 张 Q2 图表到 `data/output/`
-8. `scripts/run_q2.py` 在终端打印前 5 个攻击动作的 Top1 防守建议
+它不再只输出单一的防守 Top1，而是输出一条分层响应链：
+
+- 主防守层：`active_primary / active_combo`
+- 保底层：`fallback_mitigation / emergency_transition`
+- 地面层：`ground_only`
+- 恢复层：`recovery_only`
+
+因此，Q2 的结果可以直接服务 Q3/Q4，而不需要后续再重构动作语义。
 
 ---
 
-## 2. 每个代码文件的作用
+## 2. 当前真实输入文件
 
-### `scripts/run_q2.py`
+### 2.1 直接复用 Q1
 
-作用：
+- `data/raw/q1_robot_params.csv`
+- `data/raw/q1_segment_params.csv`
+- `data/raw/q1_support_mode_config.csv`
+- `data/raw/q1_action_templates.csv`
+- `data/raw/q1_action_phase_templates.csv`
+- `data/interim/action_features.csv`
 
-- Q2 的唯一正式运行入口
-- 调用 `pipeline.main()`
-- 在终端打印前几项 Top1 防守建议，便于快速检查结果
+这些文件提供：
 
-### `src/q2/pipeline.py`
+- 机器人几何与质量参数
+- 10 刚体节段参数
+- 动作模板与相位模板
+- Q1 输出的攻击物理量与风险量：
+  - `impact_impulse`
+  - `impact_kinetic`
+  - `score_potential`
+  - `fall_risk`
+  - `exposure_index`
+  - `exec_time`
+  - `end_velocity_peak`
 
-作用：
+### 2.2 Q2 自身维护
 
-- 串联 Q2 全流程
-- 负责“读取输入 → 计算特征 → 四方法评价 → 保存结果 → 绘图”
-- 是 Q2 的总流程层
+- `data/raw/q2_attack_semantics.csv`
+- `data/raw/q2_attack_response_policy.csv`
+- `data/raw/q2_defense_actions.csv`
+- `data/raw/q2_route_advantage.csv`
+- `data/raw/q2_family_compatibility.csv`
+
+这 5 张表分别负责：
+
+- 攻击语义标签
+- 接触相选择、恢复时窗、反击解锁规则
+- 防守角色、状态、范围、路线、机制标签、generic scope 惩罚
+- 路线优势与清距需求
+- 攻击接触族类与防守机制兼容性
+
+---
+
+## 3. 当前运行流程
+
+入口：
+
+- `python scripts/run_q2.py`
+
+执行链路：
+
+1. `scripts/run_q2.py` 调用 `src/q2/pipeline.py`
+2. `pipeline.py` 读取 Q1 输入与中间结果，同时读取 Q2 的 5 张原始表
+3. `src/q2/model_v1.py` 构建：
+   - `attack_catalog`
+   - `defense_features`
+   - `pair_matrix`
+4. `src/q2/evaluate.py` 计算方法一到方法四，并输出分层响应结果
+5. `pipeline.py` 保存中间表、调试表、审计表、验收表和图表
+
+---
+
+## 4. 当前代码文件分工
 
 ### `src/q2/model_v1.py`
 
-作用：
+负责：
 
-- 定义 Q2 的输入数据结构
-- 继承 Q1 输出并补充攻击语义标签
-- 读取 22 种防守动作元数据
-- 推导防守动作的基础物理特征
-- 构造 13×22 攻防对基础矩阵
+- 读取并校验 Q2 原始表
+- 从 Q1 相位结构中提取接触相与攻击时序
+- 构建防守动作的执行时间、承载能力、吸收能力、清距能力
+- 计算每个攻防 pair 的：
+  - 状态可行性
+  - 几何匹配
+  - 时序反应
+  - 路线优势
+  - 清距成功率
+  - family 兼容性
+  - 剩余损伤
+  - 跌倒风险
 
-当前主要计算的量包括：
+最关键的函数：
 
-- `exec_time_def`：防守执行时间
-- `balance_cost_def`：防守自身质心位移
-- `mobility_cost`：防守位移代价系数
-- `effective_support_mass`：防守等效支撑质量
-- `elastic_transfer_rate`：局部弹性传递效率
-- `absorb_rate`：冲击吸收率
-- `force_capacity_factor`：防守承载系数
-- `force_capacity`：防守承载上限
-- `p_geo`：几何覆盖匹配度
-- `p_force`：力量匹配度
-- `p_react`：反应时间匹配度
-- `p_block`：拦截概率
-- `defense_damage`：防守耗损
-- `counter_window`：反击时间窗口
-- `p_fall`：防守倒地风险
+- `build_attack_catalog(...)`
+- `build_defense_feature_table(...)`
+- `build_pair_matrix(...)`
 
 ### `src/q2/evaluate.py`
 
-作用：
+负责：
 
-- 实现四种方法的评分逻辑
-- 计算主模型综合防守效用
-- 实现非线性倒地惩罚
-- 进行闭环约束筛选
-- 输出 `defense_matchup.csv`、`counter_chain.csv`、`q2_method_summary.csv`
+- 计算方法一、二、三、四
+- 在方法四中分层选取：
+  - `active_top1`
+  - `fallback_top1`
+  - `ground_top1`
+  - `recovery_if_needed`
+- 输出：
+  - `defense_matchup.csv`
+  - `counter_chain.csv`
+  - `q2_method_summary.csv`
+
+### `src/q2/pipeline.py`
+
+负责：
+
+- 串联整个 Q2
+- 输出主结果表、调试表、审计表、验收表
+- 调用 `src/q2/plot.py` 生成最终保留图
 
 ### `src/q2/plot.py`
 
-作用：
+负责：
 
-- 绘制 Q2 图表
-- 沿用 Q1 的绘图风格
-- 中文 `SimSun`，英文 `Times New Roman`
-- 分辨率统一为 `520 dpi`
-
----
-
-## 3. 当前模型是什么
-
-Q2 当前实现的是“4 种方法并行”的结构：
-
-### 方法一：规则匹配法
-
-核心思想：
-
-- 只按攻击轨迹类型、方向、高度与防守类别做规则查表
-- 输出离散匹配等级：
-  - `1.0`：强匹配
-  - `0.5`：弱匹配
-  - `0.0`：不匹配
-
-特点：
-
-- 直观
-- 适合作为对比基线
-- 不承担精细量化任务
-
-### 方法二：拦截概率矩阵
-
-核心思想：
-
-- 对每个攻防对计算：
-  - `P_block = P_geo × P_force × P_react`
-- 只看单次拦截成功概率
-
-特点：
-
-- 比方法一更量化
-- 但仍然没有把反击窗口和倒地风险纳入核心目标
-
-### 方法三：模糊防守效用
-
-核心思想：
-
-- 将 4 个指标模糊化后线性合成：
-  - `P_block`
-  - `1 - defense_damage`
-  - `counter_window_norm`
-  - `1 - p_fall`
-
-特点：
-
-- 比方法二更平滑
-- 但本质上仍是线性加权
-
-### 方法四：我们的主模型
-
-核心思想：
-
-- 先计算基础防守效用：
-
-`V_def = 0.38 * P_block - 0.12 * defense_damage + 0.25 * counter_window_norm - 0.25 * p_fall`
-
-- 再引入非线性倒地惩罚：
-
-`R_def_fall = lambda * exp(k * p_fall) - lambda`
-
-- 再做量纲对齐后的惩罚缩放：
-
-`penalty_norm = penalty_raw / penalty_max * (V_max - V_min)`
-
-- 最终得分：
-
-`Score_def = max(0, V_def - penalty_norm)`
-
-并附加 3 个硬约束：
-
-- 几何不覆盖时直接剔除
-- 倒地风险过高时剔除
-- Top 3 推荐集必须尽量满足“主动防守 + 保底防守”闭环
+- 只按最终 `active_top1` 口径绘制所有“主防守”图
+- 对分层响应图按类别着色
+- 输出中文标题、中文坐标轴、中文图例
 
 ---
 
-## 4. 当前模型的优点与缺点
+## 5. 当前模型的关键收口点
 
-### 优点
+### 5.1 攻击侧真正由 Q1 驱动
 
-- 结构清晰，数据流分层明确：原始标签 → 防守特征 → 攻防对矩阵 → 评价输出
-- 与 Q1 的参数继承关系清楚，能形成“攻击评价 → 防守匹配 → 反击接口”的链条
-- 方法一到方法四层次分明，便于论文展示“为什么要引出主模型”
-- 主模型已经把“防守成功”从静态拦截升级为“拦截 + 反击机会 + 倒地风险”的综合评价
-- 闭环约束已经落地，不是只给单一最优答案，而是输出可供 Q3 使用的优先级列表
-- 当前 `defense_features.csv` 已经附带参数审查字段，便于写作和答辩说明
+Q2 当前真实使用了 Q1 的：
 
-### 缺点
+- 相位结构
+- 接触相位
+- 接触时刻 `t_contact`
+- 恢复时窗 `t_recover`
+- 冲量 `impact_impulse`
+- 动能 `impact_kinetic`
+- 暴露风险 `exposure_index`
+- 倒地风险 `fall_risk`
+- 支撑切换数 `support_switch_count`
+- 旋转复杂度 `rotation_complexity`
+- 平移距离 `translation_distance_m`
 
-- 攻击语义标签如 `trajectory_type`、`direction_tag`、`height_tag` 仍然是语义建模输入，不是官方直接测量量
-- 防守承载链和吸收率虽然已经改为程序推导，但仍是参数化近似，不是碰撞实验标定值
-- `range_tag` 仍是辅助语义字段，当前不进入主评分链
-- 防守执行时间中的控制时滞、组合折减、支撑修正等仍属于建模假设
-- 非线性惩罚参数 `lambda=0.30`、`k=3.50` 仍沿用 Q1 口径，尚未单独做 Q2 反标定
+并进一步派生：
+
+- `contact_phase_no`
+- `contact_phase_name`
+- `contact_reach_m`
+- `contact_load_family`
+- `contact_window_type`
+- `counter_unlock_audit`
+- `attack_response_audit`
+
+### 5.2 `mechanism_tag`
+
+`mechanism_tag` 是当前 Q2 最关键的结构字段之一。
+它描述防守机制，而不是只给粗粒度 category。
+
+例如：
+
+- `D01 -> rigid_high_cross`
+- `D05 -> rigid_close_clamp`
+- `D06 -> evade_lateral`
+- `D10 -> evade_orbit`
+- `D15 -> balance_soft_yield`
+- `D19 -> ground_hold`
+- `D20 -> combo_lateral_parry`
+
+这一步让 Q2 能够真正区分：
+
+- 刚性格挡
+- 近身钳制
+- 横向规避
+- 后撤脱距
+- 环绕规避
+- 柔顺卸力
+- 地面压制
+- 组合式防守
+
+### 5.3 `q2_family_compatibility.csv`
+
+这是 Q2 final 版最关键的新表之一。
+
+固定的攻击接触族类为：
+
+- `upper_terminal`
+- `lower_terminal`
+- `sweep_line`
+- `torso_drive`
+- `sequence_chain`
+- `ground_conditional`
+
+对每一个 `(contact_load_family, mechanism_tag)`，表中给出：
+
+- `family_success_factor`
+- `family_damage_factor`
+
+这保证了：
+
+- 高位格挡不会再对腿法和冲撞拿到不合理高分
+- `sequence_chain` 会优先匹配 combo 防守机制
+- `ground_conditional` 不会再被 standing defense 占位
+
+### 5.4 `generic_scope_penalty` 已数据化
+
+原来写死在 `evaluate.py` 里的 generic penalty 已经迁回数据表：
+
+- `q2_defense_actions.csv`
+
+新增字段：
+
+- `generic_scope_level`
+- `generic_scope_penalty`
+
+当前关键设置：
+
+- `D14 -> generic, 0.06`
+- `D16 -> semi_generic, 0.02`
+- `D15 -> local, 0.00`
+
+因此 fallback 惩罚已经不再是代码暗箱，而是数据层显式配置。
 
 ---
 
-## 5. 输出文件有哪些，作用是什么
+## 6. 当前 pair-level 核心指标
 
-### 中间结果表
+`defense_pair_scores.csv` 当前至少保留了以下关键列：
 
-#### `data/interim/defense_features.csv`
+- `state_feasible`
+- `active_primary_feasible`
+- `fallback_feasible`
+- `ground_feasible`
+- `recovery_feasible`
 
-作用：
-
-- 保存 22 种防守动作的基础特征
-- 是 Q2 的“防守侧特征接口”
-
-核心字段包括：
-
-- `exec_time_def`
-- `balance_cost_def`
-- `mobility_cost`
-- `effective_support_mass`
-- `elastic_transfer_rate`
-- `absorb_rate`
-- `force_capacity`
-- `force_capacity_factor`
-- `contact_stiffness_ratio`
-- `force_capacity_factor_input`
-- `force_capacity_factor_delta`
-- `force_capacity_factor_audit`
-- `contact_stiffness_ratio_input`
-- `contact_stiffness_ratio_delta`
-- `contact_stiffness_ratio_audit`
-
-#### `data/interim/defense_pair_scores.csv`
-
-作用：
-
-- 保存 13×22 全部攻防对的评分结果
-- 是 Q2 的核心计算明细表
-
-核心字段包括：
-
-- `p_geo`
 - `direction_match`
 - `height_match`
-- `p_force`
-- `p_react`
-- `p_block`
-- `defense_damage`
-- `counter_window`
-- `p_fall`
-- `method1_score`
-- `method2_score`
-- `method3_score`
-- `proposed_score`
-- `rank`
-
-#### `data/interim/defense_matchup.csv`
-
-作用：
-
-- 保存每个攻击动作对应的 Top 1-3 防守推荐
-- 是 Q3 最直接使用的接口文件
-
-核心字段包括：
-
-- `defense_id_r1/r2/r3`
-- `block_prob_r1/r2/r3`
-- `counter_window_r1/r2/r3`
-- `fall_risk_r1/r2/r3`
-- `defense_score_r1/r2/r3`
-- `counter_action_id_r1/r2/r3`
-- `closure_complete`
-- `closure_note`
-
-#### `data/interim/counter_chain.csv`
-
-作用：
-
-- 保存“攻击动作 → 防守动作 → 可接续反击动作”的链式结构
-- 便于 Q3 做状态转移和可执行反击筛选
-
-#### `data/interim/q2_method_summary.csv`
-
-作用：
-
-- 保存四种方法对每个攻击动作给出的 Top1 防守动作
-- 用于论文中展示方法对比
-
-### 图表
-
-#### `data/output/q2_utility_matrix.png`
-
-作用：
-
-- 展示攻防效用矩阵
-- 用于看不同攻击动作的最优防守分布
-
-#### `data/output/q2_surface.png`
-
-作用：
-
-- 展示综合防守效用在关键指标平面上的响应关系
-- 适合解释主模型的非线性趋势
-
-#### `data/output/q2_waterfall.png`
-
-作用：
-
-- 展示“攻击动作 → Top1 防守”的映射关系
-
-#### `data/output/q2_parallel.png`
-
-作用：
-
-- 展示高分与低分攻防对在多维指标上的差异
-
-#### `data/output/q2_method_comparison.png`
-
-作用：
-
-- 展示四种方法的 Top1 防守结果差异
-- 是论文里最直接的“方法对比图”
-
----
-
-## 6. 当前涉及哪些参数
-
-Q2 的参数可以分成 4 层：
-
-### A. 官方直接参数
-
-这些参数直接来自题目或机器人参数表：
-
-- `max_joint_torque_nm = 145`
-- `max_motor_speed_rpm = 6400`
-- `reducer_ratio = 25`
-- `total_mass_kg = 42`
-- `leg_length_m = 0.6865`
-- `arm_span_m = 1.44`
-- `body_width_m = 0.53555`
-- `official_time_s = 1.00`（仅 D18 快速起身为题目明确给定）
-
-### B. 由 Q1 继承的参数
-
-这些参数不是 Q2 新造的，而是直接来自 Q1 输出：
-
-- `impact_score`
-- `tau_norm`
-- `balance_cost`
-- `stable_margin`
-- `stability_ratio`
-- `exec_time`
-- `time_norm`
-- `attack_utility`
-- `attack_rank`
-
-这些量在 Q2 中分别用于：
-
-- 衡量攻击强度
-- 计算对手恢复时间
-- 计算反击窗口
-- 与 Q1 的反击动作效用衔接
-
-### C. 在 Q2 中由公式推导出的参数
-
-这些量由程序计算，不是手填结论：
-
-- `omega_out`
-- `omega_eff`
-- `exec_time_def`
-- `balance_cost_def`
-- `mobility_cost`
-- `effective_support_mass`
-- `elastic_transfer_rate`
-- `force_capacity_factor`
-- `force_capacity`
-- `contact_stiffness_ratio`
-- `absorb_rate`
+- `range_match`
+- `zone_match`
 - `p_geo`
-- `p_force`
+
 - `p_react`
-- `p_block`
-- `defense_damage`
-- `counter_window`
-- `counter_window_norm`
-- `counter_prob`
+- `p_route`
+- `route_rule_hit`
+- `route_rule_specificity`
+- `route_rule_specificity_note`
+
+- `clearance_need_ratio`
+- `d_need`
+- `d_clear`
+- `p_clear`
+
+- `p_load_j`
+- `p_load_e`
+- `p_load`
+
+- `p_family`
+- `family_rule_hit`
+- `family_damage_factor`
+
+- `geo_cap_applied`
+- `geo_cap_reason`
+- `pair_audit_flag`
+
+- `success_core`
+- `effective_absorb`
+- `p_success`
+- `residual_damage`
 - `p_fall`
-- `v_def`
-- `fall_penalty`
-- `proposed_score`
-
-### D. 建模假设参数
-
-这些不是官方直接量，而是当前方案采用的建模设定：
-
-#### 时间与控制相关
-
-- `control_delay_s = 0.12`
-- `multi_joint_sync_delay_s = 0.03`
-- `lower_body_extra_delay_s = 0.05`
-- `ground_motion_extra_delay_s = 0.10`
-- `combo_overlap_discount_s = 0.03`
-- `recover_factor_s = 0.30`
-
-#### 防守位移近似
-
-- `step_back_leg_factor = 0.30`
-- `orbit_leg_factor = 0.45`
-- `step_adjust_factor = 0.60`
-- `micro_adjust_radius_ratio = 0.50`
-- `controlled_fall_gamma = 0.12`
-- `rapid_getup_gamma = 0.08`
-- `ground_guard_gamma = 0.50`
-
-#### 防守支撑链与承载链近似
-
-- `arm_pair_link_efficiency = 0.78`
-- `arm_single_link_efficiency = 0.67`
-- `shoulder_single_link_efficiency = 0.72`
-- `wrist_pair_link_efficiency = 0.75`
-- `leg_pair_link_efficiency = 0.86`
-- `leg_single_link_efficiency = 0.82`
-- `torso_turn_link_efficiency = 0.74`
-- `imu_link_efficiency = 0.82`
-- `step_link_efficiency = 0.88`
-- `ground_support_ratio = 0.80`
-
-#### 类别基准
-
-- `force_base_rigid = 0.85`
-- `force_base_posture = 0.60`
-- `force_base_balance = 0.45`
-- `force_base_soft = 0.50`
-- `force_base_ground = 0.30`
-- `force_support_ratio_cap = 1.15`
-- `elastic_mass_cap_ratio = 2.20`
-- `absorb_base_rigid = 0.58`
-- `absorb_base_posture = 0.76`
-- `absorb_base_balance = 0.70`
-- `absorb_base_soft = 0.99`
-- `absorb_base_ground = 0.35`
-- `absorb_noncontact = 0.95`
-
-#### 主模型权重与惩罚参数
-
-- `alpha = 0.38`
-- `beta = 0.12`
-- `gamma = 0.25`
-- `delta = 0.25`
-- `lambda = 0.30`
-- `k = 3.50`
-
----
-
-## 7. 哪些参数是有依据的，哪些是推出来的，哪些是假设
-
-### 可以写成“有依据”
-
-- 机器人尺寸、质量、力矩、转速、减速比
-- D18 的 1 秒起身时间
-- Q1 输出的攻击强度、执行时间、稳定性相关字段
-- 攻击动作和防守动作的名称、类型、组合关系
-
-### 可以写成“由公式推导得到”
-
-- `omega_out`
-- `omega_eff`
-- `exec_time_def`
-- `balance_cost_def`
-- `mobility_cost`
-- `effective_support_mass`
-- `elastic_transfer_rate`
-- `force_capacity_factor`
-- `force_capacity`
-- `contact_stiffness_ratio`
-- `absorb_rate`
-- `p_block`
-- `defense_damage`
+- `base_counter_window`
 - `counter_window`
-- `p_fall`
-- `proposed_score`
 
-### 必须写成“模型假设 / 建模设定”
-
-- 攻击语义标签：
-  - `trajectory_type`
-  - `direction_tag`
-  - `height_tag`
-  - `range_tag`
-  - `target_zone`
-- 防守覆盖标签：
-  - `coverage_direction`
-  - `coverage_height`
-  - `contact_mode`
-- 各类 link efficiency、gamma、delay、base factor
-- 主模型权重和非线性惩罚参数
-
-要特别注意：
-
-- `q2_attack_semantics.csv` 里的语义标签不是官方测量值，是对题目动作描述的结构化表达
-- `q2_defense_actions.csv` 里的基础字段里，动作名称、类别、组合关系可以视为结构化动作定义；但承载能力与接触刚度相关字段只能视为模型口径，不应写成“官方给定”
-- 当前代码已经把 `force_capacity_factor_input` 和 `contact_stiffness_ratio_input` 与程序推导值分开输出，因此写作时应明确“输入参考值”和“最终推导值”不是同一个概念
+这使 Q2 已经不再是黑箱打分，而是可以逐项追踪每个攻防对为什么成立或失效。
 
 ---
 
-## 8. 写作者如何表述当前 Q2
+## 7. 当前图层口径
 
-建议写作者按下面的顺序叙述：
+这是这轮收口最重要的改动之一。
+现在所有标题里写“主防守”的图：
 
-1. Q2 的目标不是单纯找“能挡住”的动作，而是找“能挡住且利于反击”的动作
-2. Q2 输入分为三层：
-   - 官方机器人参数
-   - Q1 继承的攻击特征
-   - Q2 的攻击语义与防守动作元数据
-3. 先介绍三种对比方法的局限：
-   - 方法一过于规则化
-   - 方法二只优化拦截率
-   - 方法三仍然是线性模糊合成
-4. 再引出主模型：
-   - 拦截概率
-   - 防守耗损
-   - 反击窗口
-   - 倒地风险
-5. 说明闭环约束：
-   - 推荐集不是单一动作
-   - 必须兼顾主动防守和保底防守
-6. 再说明 Q2 输出如何进入 Q3：
-   - `defense_matchup.csv` 给出状态转移所需概率和窗口
-   - `counter_chain.csv` 给出可接续反击动作
+- 一律只认最终 `active_top1`
+- 不再从 `evaluated_pairs` 二次 groupby 抢 Top1
+
+因此，图层和表层已经统一。
+
+### 当前最终保留图
+
+建议保留这 6 张：
+
+1. `q2_method_comparison.png`
+   - Q2 四种方法主防守 Top1 对比图
+2. `q2_layered_response_overview.png`
+   - Q2 分层响应总览图
+3. `q2_surface.png`
+   - Q2 主防守 Top1 成功率—风险散点图
+4. `q2_utility_matrix.png`
+   - Q2 主防守层效用矩阵
+5. `q2_waterfall.png`
+   - Q2 攻击动作到主防守 Top1 的映射图
+6. `q2_parallel.png`
+   - Q2 主防守 Top1 指标平行对比图
+
+### 关于 `q2_parallel.png`
+
+它已经重新接回 final 输出链路，不再是旧版本遗留图。
+当前含义为：
+
+- Q2 主防守 Top1 指标平行对比图
+- 横向比较成功率、剩余伤害安全性、反击窗口、倒地风险安全性
+- 用于辅助解释不同主防守动作之间的性能差异
 
 ---
 
-## 9. 当前一句话总结
+## 8. 当前分层输出契约
 
-Q2 当前已经实现为一个“继承 Q1 攻击特征、基于防守物理特征推导、用四种方法并行评价、最终输出带闭环约束的攻防匹配接口”的防守建模系统，其中方法四把防守从静态拦截提升为“拦截 + 反击机会 + 倒地风险”的动态决策问题。
+`q2_method_summary.csv` 现在已经按 final 契约输出，不再是单一 Top1 表。
+
+关键字段：
+
+- `method1_top1_defense`
+- `method2_top1_defense`
+- `method3_top1_defense`
+
+- `method4_has_active`
+- `method4_has_ground`
+
+- `method4_active_top1`
+- `method4_active_role`
+- `method4_active_category`
+- `method4_active_score`
+- `method4_active_confidence`
+
+- `method4_fallback_top1`
+- `method4_fallback_role`
+- `method4_fallback_category`
+- `method4_fallback_score`
+
+- `method4_ground_top1`
+- `method4_ground_role`
+- `method4_ground_category`
+- `method4_ground_score`
+
+- `method4_recovery_if_needed`
+- `method4_recovery_role`
+- `method4_recovery_category`
+- `method4_recovery_score`
+
+- `method4_note`
+
+其中：
+
+- `method4_active_confidence` 当前按 `primary_score` 分级：
+  - `strong`: `score >= 0.10`
+  - `medium`: `0.03 <= score < 0.10`
+  - `weak`: `0 < score < 0.03`
+
+因此：
+
+- 对常规 standing 场景，重点看 `active + fallback`
+- 对 fallen 场景，重点看 `ground + recovery`
+- `recovery` 只在确实需要恢复链时才出现
+
+---
+
+## 9. 当前关键结果解释
+
+### 9.1 A11 已经收口
+
+此前 `A11` 容易出现 `active = NA`。
+当前收口后：
+
+- `A11 -> method4_active_top1 = D22`
+- `A11 -> active_role = active_combo`
+- `A11 -> active_confidence = weak`
+
+这说明：
+
+- 五连踢不再被误压成“无主防守”
+- combo 机制已经能够正确承接 `sequence_chain`
+- 但它仍属于“有解但强度不高”的主防守，不应被误读为强推荐
+
+### 9.2 A13 语义已固定
+
+当前 A13 的最终语义是：
+
+- `method4_active_top1 = D05`
+- `method4_fallback_top1 = D16`
+- `method4_note = standing_with_fallback`
+
+即：
+
+> A13 是“攻击方倒地后的反击动作”，但防守方并不必然处于倒地状态。因此 Q2 中应按“站立防守应对倒地反击”处理，主防守选择钳制格挡，保底响应选择步点调整。
+
+这次修正的关键是区分：
+
+- `attack_entry_state`：攻击方发动动作时的状态
+- `defender_entry_state`：防守方进入防守动作时的状态
+
+此前把 A13 的攻击方倒地状态误当成防守方倒地状态，会导致站立防守被全部排除，只剩 D19/D18 地面链，这是不符合题意的。
+
+这是当前 final 版的明确口径。
+
+### 9.3 主防守层不再被单一动作垄断
+
+当前 `q2_active_distribution.csv` 显示：
+
+- `D10` 出现 3 次
+- `D05` 出现 3 次
+- `D03` 出现 2 次
+- `D01`、`D04`、`D20`、`D22`、`D06` 也都进入了主防守层
+
+这意味着：
+
+- 主防守层已经包含 `block / evade / combo`
+- 不再被单一防守动作一统
+
+---
+
+## 10. 当前审计与验收
+
+### 10.1 审计表
+
+当前新增并保留：
+
+- `q2_zero_tie_audit.csv`
+- `q2_family_audit.csv`
+- `q2_active_distribution.csv`
+- `q2_rule_coverage_audit.csv`
+- `q2_rule_audit_summary.csv`
+- `q2_top1_audit_summary.csv`
+- `q2_acceptance_checks.csv`
+
+### 10.2 规则审计
+
+当前 `q2_rule_audit_summary.csv` 统计：
+
+- 总 pair 数
+- family rule 命中数
+- route rule 命中数
+- geo cap 触发数
+- missing family / route rule 数
+- 非 normal 审计条目数
+
+当前 `q2_top1_audit_summary.csv` 只针对：
+
+- `active_top1`
+- `fallback_top1`
+- `ground_top1`
+
+统计：
+
+- Top1 中 family rule 命中占比
+- Top1 中 route rule 命中占比
+- Top1 中 geo cap 占比
+- Top1 中 `pair_audit_flag != normal` 的占比
+
+### 10.3 当前自动验收
+
+`q2_acceptance_checks.csv` 当前全部通过，包括：
+
+1. `A13_has_standing_response = True`
+2. `A13_not_forced_to_ground_layer = True`
+3. `A05_not_D02 = True`
+4. `A12_not_D01 = True`
+5. `A11_active_combo_not_blank = True`
+6. `active_not_monopolized = True`
+7. `active_category_diversity = True`
+8. `posture_balance_outside_active = True`
+9. `ground_recovery_layer_isolated = True`
+10. `final_active_rule_coverage = True`
+11. `A13_baseline_methods_not_blank = True`
+
+---
+
+## 11. 当前与 Q3/Q4 的接口关系
+
+这版 Q2 已经能稳定向 Q3/Q4 提供：
+
+- 主防守动作
+- fallback 保底动作
+- ground / recovery 分层动作
+- 反击窗口 `counter_window`
+- 反击候选动作
+- 每个攻防 pair 的成功率、剩余损伤、跌倒风险
+
+此外，这一轮已经顺序重跑：
+
+- `python scripts/run_q2.py`
+- `python scripts/run_q3.py`
+
+Q3 通过，说明当前 Q2 输出接口与 Q3 兼容。
+
+---
+
+## 12. 论文写作建议
+
+### 12.1 建议正文主线
+
+建议按下面顺序写 Q2：
+
+1. 在 Q1 相位化攻击模型基础上构建攻防响应层
+2. 将防守动作划分为主防守、保底、地面、恢复四层
+3. 用几何匹配、时序匹配、路线优势、清距能力、family compatibility 建立 pair-level 模型
+4. 用四种方法对比
+5. 以方法四作为最终主模型，输出分层响应链
+
+### 12.2 建议强调的两点
+
+第一：
+
+Q2 不是在“给防守动作打分”，而是在“对每个攻击动作构造一条闭环响应链”。
+
+第二：
+
+Q2 不是独立拍脑袋建模，而是明确继承了 Q1 的相位时序和攻击物理量。
+
+### 12.3 当前最适合写进正文的结果表述
+
+- 直线拳法倾向高位刚性格挡或近身肘架
+- 宽弧和旋转攻击偏向 lateral / orbit 类规避
+- 腿法和冲撞更依赖 close clamp、soft yield、step reset
+- 组合技更偏好 `active_combo`
+- 倒地反击属于攻击方条件动作，防守方仍按站立防守建模，优先用钳制格挡限制后续反击链
+
+---
+
+## 13. 第二问最终答案
+
+第二问的最终结果可以概括为：
+
+> 对每一种攻击动作，模型给出一个第一时间应对的主防守动作，同时给出一个保底响应动作。主防守用于拦截、闪避或限制攻击，保底响应用于在主防守未完全奏效时降低剩余伤害和倒地风险。
+
+### 13.1 十三种攻击动作的最佳主防守
+
+| 攻击动作 | 最佳主防守 | 防守类型 | 保底响应 | 结果解释 |
+|---|---|---|---|---|
+| 左右直拳 | 十字格挡 | 格挡 | 护头防御 | 直拳是正面直线攻击，十字格挡能直接封住头胸正面区域，稳定性最高。 |
+| 左右勾拳 | 肘挡 | 格挡 | 重心补偿 | 勾拳从侧方弧线进入，肘挡更适合近距离护头护胸，能减少侧向冲击。 |
+| 组合拳 | 肘挡 | 格挡 | 卸力缓冲 | 组合拳连续性强，肘挡能维持近身防护结构，保底用卸力缓冲吸收连续冲击。 |
+| 摆拳 | 滑步环绕 | 闪避 | 步点调整 | 摆拳横向扫击幅度大，硬挡风险较高，滑步环绕更适合避开攻击弧线。 |
+| 前踢 | 钳制格挡 | 格挡 | 步点调整 | 前踢是直线腿法，钳制格挡可以限制腿部或后续连续动作。 |
+| 侧踢 | 滑步环绕 | 闪避 | 步点调整 | 侧踢爆发力强，正面承受代价高，滑步环绕能脱离主要受力方向。 |
+| 回旋踢或转身踢 | 滑步环绕 | 闪避 | 步点调整 | 回旋类攻击轨迹大、冲击强，绕开攻击弧线比正面格挡更安全。 |
+| 低扫腿 | 下压格挡 | 格挡 | 步点调整 | 低扫腿主要攻击下肢，下压格挡与低位防护最匹配。 |
+| 膝撞 | 钳制格挡 | 格挡 | 卸力缓冲 | 膝撞是近身直线冲击，钳制格挡可以控制近身动作并降低连续攻击风险。 |
+| 拳腿组合 | 闪挡反组合 | 组合防守 | 步点调整 | 拳腿组合包含多阶段攻击，单一防守动作不足，组合防守更适合连续响应。 |
+| 五连踢 | 挡撤绕组合 | 组合防守 | 卸力缓冲 | 五连踢连续性强，挡撤绕可以先阻断、再拉开距离并重新组织站位。 |
+| 冲撞 | 左右侧闪 | 闪避 | 卸力缓冲 | 冲撞属于身体前冲，正面对抗容易失衡，侧闪能快速离开冲击线。 |
+| 倒地反击 | 钳制格挡 | 格挡 | 步点调整 | 倒地反击是低位或近身条件攻击，钳制格挡可以限制其后续反击链。 |
+
+### 13.2 防守类型分布
+
+| 防守类型 | 覆盖攻击数量 | 对应攻击 |
+|---|---:|---|
+| 格挡类 | 7 | 左右直拳、左右勾拳、组合拳、前踢、低扫腿、膝撞、倒地反击 |
+| 闪避类 | 4 | 摆拳、侧踢、回旋踢或转身踢、冲撞 |
+| 组合防守类 | 2 | 拳腿组合、五连踢 |
+
+### 13.3 结果解读
+
+当前结果体现出三条规律：
+
+- 对直线、近身、低位或条件反击类攻击，模型更倾向于选择格挡或钳制，因为这类攻击的接触窗口明确，直接限制对方动作更有效。
+- 对大幅度、高冲击、旋转或冲撞类攻击，模型更倾向于选择闪避，因为硬挡会带来较高的失衡和剩余伤害风险。
+- 对连续攻击，模型更倾向于组合防守，因为单一动作难以覆盖多个接触相，必须通过“挡、撤、绕”或“闪、挡、反”形成连续闭环。
+
+此外，多数攻击动作都配有平衡类保底响应，说明防守结果不仅取决于是否挡住攻击，还取决于防守后能否维持站立姿态。这一点与题目要求的“完整防御闭环”一致。
+
+---
+
+## 14. 一句话总结
+
+Q2 当前最终版已经完成从“静态攻防打分表”到“Q1 相位化攻击驱动的分层攻防响应模型”的收口，并且已经通过：
+
+- 结构验收
+- 规则覆盖率验收
+- 边界动作验收
+- Q3 兼容性验证

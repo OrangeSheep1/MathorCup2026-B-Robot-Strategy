@@ -1,0 +1,14 @@
+action_id,contact_phase_policy,contact_phase_no,contact_fraction_in_phase,recover_phase_policy,recover_delay_base_s,recover_switch_coeff,recover_rotation_coeff,recover_risk_coeff,counter_unlock_mode,counter_unlock_coeff,response_policy_source,notes
+A01,first_strike,,0.60,from_contact_to_end,0.06,0.04,0.04,0.20,immediate,1.00,derived_from_q1_phase_templates,default single strike timing
+A02,first_strike,,0.60,from_contact_to_end,0.06,0.04,0.04,0.20,immediate,1.00,derived_from_q1_phase_templates,hook strike timing
+A03,first_strike,,0.60,from_contact_to_end,0.08,0.05,0.04,0.20,after_first_break,0.60,derived_from_q1_phase_templates,defense reacts to the first threatening strike
+A04,first_strike,,0.62,from_contact_to_end,0.07,0.04,0.05,0.20,immediate,1.00,derived_from_q1_phase_templates,swing impact happens slightly later in phase
+A05,first_strike,,0.60,from_contact_to_end,0.06,0.04,0.04,0.20,immediate,1.00,derived_from_q1_phase_templates,front kick contact window
+A06,first_strike,,0.60,from_contact_to_end,0.06,0.04,0.04,0.20,immediate,1.00,derived_from_q1_phase_templates,side kick contact window
+A07,main_strike,,0.65,from_contact_to_end,0.08,0.05,0.05,0.22,immediate,1.00,derived_from_q1_phase_templates,main threat is the release phase
+A08,first_strike,,0.58,from_contact_to_end,0.06,0.04,0.04,0.18,immediate,1.00,derived_from_q1_phase_templates,low sweep contacts early in release arc
+A09,first_strike,,0.60,from_contact_to_end,0.06,0.04,0.03,0.18,immediate,1.00,derived_from_q1_phase_templates,knee strike short chain timing
+A10,first_strike,,0.60,from_contact_to_end,0.08,0.05,0.04,0.20,after_first_break,0.55,derived_from_q1_phase_templates,first response targets the opening punch phase
+A11,first_strike,,0.58,from_contact_to_end,0.08,0.05,0.04,0.22,after_first_break,0.30,derived_from_q1_phase_templates,five-kick chain allows only a small early counter window
+A12,body_impact,,0.60,from_contact_to_end,0.10,0.05,0.03,0.22,after_main_contact,0.70,derived_from_q1_phase_templates,charge threat is the body impact phase and counter opens after contact
+A13,final_strike,,0.60,from_contact_to_end,0.10,0.04,0.04,0.24,disabled,0.00,derived_from_q1_phase_templates,recovery phase is not the contact phase

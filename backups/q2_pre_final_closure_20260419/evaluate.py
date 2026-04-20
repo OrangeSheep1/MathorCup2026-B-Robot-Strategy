@@ -1,4 +1,4 @@
-"""Q2 evaluation, layered defense selection, and closure outputs."""
+"""Q2 evaluation, layered selection, and compatibility outputs."""
 
 from __future__ import annotations
 
@@ -21,14 +21,13 @@ FALLBACK_WEIGHTS = {
     "stability": 0.35,
 }
 
-GROUND_WEIGHTS = {
-    "success": 0.45,
-    "damage_safe": 0.35,
-    "stability": 0.20,
-}
-
 FUZZY_GRADE_VECTOR = np.array([1.0, 0.6, 0.2], dtype=float)
-EPSILON = 1e-9
+
+GENERIC_SCOPE_PENALTY = {
+    "D14": 0.06,
+    "D16": 0.02,
+    "D15": 0.00,
+}
 
 
 def rank_within_attack(data: pd.DataFrame, score_column: str) -> pd.Series:
@@ -48,16 +47,8 @@ def _safe_norm(series: pd.Series) -> pd.Series:
     return (series - minimum) / (maximum - minimum)
 
 
-def _inverse_exec_norm(series: pd.Series) -> pd.Series:
-    minimum = float(series.min())
-    maximum = float(series.max())
-    if np.isclose(minimum, maximum):
-        return pd.Series(np.full(len(series), 1.0), index=series.index, dtype=float)
-    return 1.0 - (series - minimum) / (maximum - minimum)
-
-
 def _generic_scope_penalty(defense_id: pd.Series) -> pd.Series:
-    return pd.Series(np.zeros(len(defense_id)), index=defense_id.index, dtype=float)
+    return defense_id.astype(str).map(GENERIC_SCOPE_PENALTY).fillna(0.0).astype(float)
 
 
 def _rule_match_grade(row: pd.Series) -> float:
@@ -154,26 +145,11 @@ def compute_method4_scores(
     primary = dict(PRIMARY_WEIGHTS if primary_weights is None else primary_weights)
     fallback = dict(FALLBACK_WEIGHTS if fallback_weights is None else fallback_weights)
     evaluated = pair_matrix.copy()
-    generic_penalty = (
-        evaluated["generic_scope_penalty"].astype(float)
-        if "generic_scope_penalty" in evaluated.columns
-        else _generic_scope_penalty(evaluated["defense_id"])
-    )
-    sequence_combo_bonus = np.where(
-        (evaluated["contact_load_family"] == "sequence_chain")
-        & (evaluated["phase_count"].astype(int) >= 4)
-        & (evaluated["defense_role"] == "active_combo"),
-        0.20 * evaluated["p_family"] * evaluated["p_route"],
-        0.0,
-    )
-    evaluated["sequence_combo_bonus"] = sequence_combo_bonus
-
     raw_primary = (
         primary["success"] * evaluated["p_success"]
         - primary["damage"] * evaluated["residual_damage"]
         + primary["counter"] * evaluated["counter_window_norm"]
         - primary["fall"] * evaluated["p_fall"]
-        + evaluated["sequence_combo_bonus"]
     )
     evaluated["proposed_score"] = _score_primary_only(evaluated, raw_primary)
     evaluated["primary_score"] = evaluated["proposed_score"]
@@ -188,29 +164,10 @@ def compute_method4_scores(
         fallback["success"] * evaluated["p_success"]
         + fallback["damage_safe"] * (1.0 - evaluated["residual_damage"])
         + fallback["stability"] * (1.0 - evaluated["p_fall"])
-        - generic_penalty
+        - _generic_scope_penalty(evaluated["defense_id"])
     ).where(fallback_mask, 0.0).clip(lower=0.0)
-
-    ground_mask = evaluated["defense_role"].eq("ground_only") & evaluated["ground_feasible"]
-    evaluated["ground_score"] = (
-        GROUND_WEIGHTS["success"] * evaluated["p_success"]
-        + GROUND_WEIGHTS["damage_safe"] * (1.0 - evaluated["residual_damage"])
-        + GROUND_WEIGHTS["stability"] * (1.0 - evaluated["p_fall"])
-    ).where(ground_mask, 0.0).clip(lower=0.0)
-
-    recovery_mask = evaluated["defense_role"].eq("recovery_only") & evaluated["recovery_feasible"]
-    recovery_pool = evaluated.loc[recovery_mask, ["exec_time_def", "p_fall"]].copy()
-    if recovery_pool.empty:
-        evaluated["recovery_score"] = 0.0
-    else:
-        recovery_speed = _inverse_exec_norm(recovery_pool["exec_time_def"])
-        recovery_pool["recovery_score"] = 0.80 * recovery_speed + 0.20 * (1.0 - recovery_pool["p_fall"])
-        evaluated["recovery_score"] = recovery_pool["recovery_score"].reindex(evaluated.index).fillna(0.0).clip(lower=0.0)
-
     evaluated["rank"] = rank_within_attack(evaluated, "proposed_score")
     evaluated["fallback_rank"] = rank_within_attack(evaluated, "fallback_score")
-    evaluated["ground_rank"] = rank_within_attack(evaluated, "ground_score")
-    evaluated["recovery_rank"] = rank_within_attack(evaluated, "recovery_score")
     return evaluated
 
 
@@ -222,20 +179,6 @@ def _pick_counter_rows(row: pd.Series) -> tuple[str, str, str]:
     )
 
 
-def _method_top(group: pd.DataFrame, score_column: str) -> pd.Series | None:
-    active_pool = group[group["primary_role_feasible"]].copy()
-    if active_pool.empty:
-        return None
-    active_pool = active_pool.sort_values(
-        by=[score_column, "p_success", "residual_damage", "p_fall", "counter_window"],
-        ascending=[False, False, True, True, False],
-    )
-    top_row = active_pool.iloc[0]
-    if float(top_row[score_column]) <= EPSILON or not bool(top_row["state_feasible"]):
-        return None
-    return top_row
-
-
 def _pick_recovery_action(group: pd.DataFrame, active_row: pd.Series | None, fallback_row: pd.Series | None) -> pd.Series | None:
     if active_row is not None and str(active_row["exit_state_after_defense"]) == "fallen":
         pass
@@ -244,50 +187,18 @@ def _pick_recovery_action(group: pd.DataFrame, active_row: pd.Series | None, fal
     else:
         return None
 
-    recovery_pool = group[group["recovery_feasible"]].copy()
+    recovery_pool = group[group["defense_role"].isin(["recovery_only", "ground_only"])].copy()
     if recovery_pool.empty:
         return None
-    recovery_pool = recovery_pool.sort_values(
-        by=["recovery_score", "p_fall", "exec_time_def"],
-        ascending=[False, True, True],
-    )
-    top_row = recovery_pool.iloc[0]
-    if float(top_row["recovery_score"]) <= EPSILON:
-        return None
-    return top_row
-
-
-def _layer_score(defense_row: pd.Series | None, layer: str) -> float:
-    if defense_row is None:
-        return 0.0
-    if layer == "active":
-        return float(defense_row["primary_score"])
-    if layer == "fallback":
-        return float(defense_row["fallback_score"])
-    if layer == "ground":
-        return float(defense_row["ground_score"])
-    if layer == "recovery":
-        return float(defense_row["recovery_score"])
-    return 0.0
-
-
-def _active_confidence_label(active_row: pd.Series | None) -> str:
-    if active_row is None:
-        return ""
-    score = float(active_row["primary_score"])
-    if score >= 0.10:
-        return "strong"
-    if score >= 0.03:
-        return "medium"
-    if score > EPSILON:
-        return "weak"
-    return ""
-
-
-def _summary_method_record(defense_row: pd.Series | None) -> tuple[str, str]:
-    if defense_row is None:
-        return "", "NA"
-    return str(defense_row["defense_id"]), str(defense_row["defense_category"])
+    attack_low = str(group.iloc[0]["height_tag"]) == "low" or str(group.iloc[0]["target_zone"]) == "lower_limbs"
+    if attack_low:
+        preferred = recovery_pool[recovery_pool["defense_role"] == "ground_only"]
+        if not preferred.empty:
+            return preferred.iloc[0]
+    preferred = recovery_pool[recovery_pool["defense_role"] == "recovery_only"]
+    if not preferred.empty:
+        return preferred.iloc[0]
+    return recovery_pool.iloc[0]
 
 
 def build_matchup_outputs(
@@ -299,90 +210,68 @@ def build_matchup_outputs(
 
     for action_id, group in evaluated_pairs.groupby("action_id", sort=False):
         action_row = group.iloc[0]
-        defender_entry_state = str(action_row.get("defender_entry_state", "standing"))
-
-        if defender_entry_state == "fallen":
+        attack_entry_state = str(action_row["attack_entry_state"])
+        ground_row = None
+        if attack_entry_state == "fallen":
             active_row = None
-            fallback_pool = group[group["fallback_feasible"]].sort_values(
-                by=["fallback_score", "residual_damage", "p_fall"],
-                ascending=[False, True, True],
-            )
-            fallback_row = None if fallback_pool.empty or float(fallback_pool.iloc[0]["fallback_score"]) <= EPSILON else fallback_pool.iloc[0]
+            fallback_row = None
             ground_pool = group[group["ground_feasible"]].sort_values(
-                by=["ground_score", "residual_damage", "p_fall"],
-                ascending=[False, True, True],
+                by=["fallback_score", "p_success", "stability_safe"],
+                ascending=[False, False, False],
             )
-            ground_row = None if ground_pool.empty or float(ground_pool.iloc[0]["ground_score"]) <= EPSILON else ground_pool.iloc[0]
             recovery_pool = group[group["recovery_feasible"]].sort_values(
-                by=["recovery_score", "p_fall", "exec_time_def"],
-                ascending=[False, True, True],
+                by=["exec_time_def", "stability_safe"],
+                ascending=[True, False],
             )
-            recovery_row = None if recovery_pool.empty or float(recovery_pool.iloc[0]["recovery_score"]) <= EPSILON else recovery_pool.iloc[0]
+            ground_row = None if ground_pool.empty else ground_pool.iloc[0]
+            recovery_row = None if recovery_pool.empty else recovery_pool.iloc[0]
         else:
             active_pool = group[group["primary_role_feasible"]].sort_values(
-                by=["primary_score", "p_success", "residual_damage", "p_fall", "counter_window"],
-                ascending=[False, False, True, True, False],
+                by=["proposed_score", "p_success", "counter_window"],
+                ascending=[False, False, False],
             )
             fallback_pool = group[group["fallback_feasible"]].sort_values(
-                by=["fallback_score", "residual_damage", "p_fall"],
-                ascending=[False, True, True],
+                by=["fallback_score", "p_success", "stability_safe"],
+                ascending=[False, False, False],
             )
-            active_row = None if active_pool.empty or float(active_pool.iloc[0]["primary_score"]) <= EPSILON else active_pool.iloc[0]
-            fallback_row = None if fallback_pool.empty or float(fallback_pool.iloc[0]["fallback_score"]) <= EPSILON else fallback_pool.iloc[0]
-            ground_row = None
+            active_row = None if active_pool.empty else active_pool.iloc[0]
+            fallback_row = None if fallback_pool.empty else fallback_pool.iloc[0]
             recovery_row = _pick_recovery_action(group, active_row, fallback_row)
 
-        if defender_entry_state == "fallen":
-            closure_complete = ground_row is not None
-            if ground_row is not None and recovery_row is not None:
-                closure_note = "fallen_ground_then_recovery"
-            elif ground_row is not None:
-                closure_note = "fallen_ground_response"
-            else:
-                closure_note = "no_feasible_ground_response"
+        selected_groups = set()
+        if attack_entry_state == "fallen":
+            if ground_row is not None:
+                selected_groups.add("ground")
+            if recovery_row is not None:
+                selected_groups.add("recovery")
         else:
-            closure_complete = active_row is not None
-            if active_row is None:
-                closure_note = "no_feasible_active_primary"
-            elif fallback_row is None:
-                closure_note = "standing_active_chain"
-            else:
-                closure_note = "standing_with_fallback"
+            if active_row is not None:
+                selected_groups.add("active")
+            if fallback_row is not None:
+                selected_groups.add("fallback")
 
         row_record: dict[str, object] = {
             "action_id": action_id,
             "action_name": action_row["action_name"],
             "attack_category": action_row["attack_category"],
-            "closure_complete": closure_complete,
-            "closure_note": closure_note,
-            "active_top1_confidence": _active_confidence_label(active_row),
+            "closure_complete": (
+                ("ground" in selected_groups and "recovery" in selected_groups)
+                if attack_entry_state == "fallen"
+                else ("active" in selected_groups and "fallback" in selected_groups)
+            ),
+            "closure_note": (
+                "OK"
+                if (
+                    ("ground" in selected_groups and "recovery" in selected_groups)
+                    if attack_entry_state == "fallen"
+                    else ("active" in selected_groups and "fallback" in selected_groups)
+                )
+                else ("missing:ground_or_recovery" if attack_entry_state == "fallen" else "missing:active_or_fallback")
+            ),
         }
 
-        semantic_layers = {
-            "active": active_row,
-            "fallback": fallback_row,
-            "ground": ground_row,
-            "recovery": recovery_row,
-        }
-        for layer_name, defense_row in semantic_layers.items():
-            prefix = "recovery_if_needed" if layer_name == "recovery" else f"{layer_name}_top1"
-            row_record[f"{prefix}_defense_id"] = "" if defense_row is None else defense_row["defense_id"]
-            row_record[f"{prefix}_defense_name"] = "" if defense_row is None else defense_row["defense_name"]
-            row_record[f"{prefix}_role"] = "" if defense_row is None else defense_row["defense_role"]
-            row_record[f"{prefix}_category"] = "" if defense_row is None else defense_row["defense_category"]
-            row_record[f"{prefix}_score"] = _layer_score(defense_row, layer_name)
-            if layer_name != "recovery":
-                row_record[f"{prefix}_success"] = 0.0 if defense_row is None else float(defense_row["p_success"])
-                row_record[f"{prefix}_damage"] = 0.0 if defense_row is None else float(defense_row["residual_damage"])
-                row_record[f"{prefix}_fall"] = 0.0 if defense_row is None else float(defense_row["p_fall"])
-            if layer_name == "active":
-                row_record[f"{prefix}_counter_window"] = 0.0 if defense_row is None else float(defense_row["counter_window"])
-                row_record[f"{prefix}_counter_action_id"] = "" if defense_row is None else str(defense_row.get("counter_action_id", ""))
-                row_record[f"{prefix}_counter_action_name"] = "" if defense_row is None else str(defense_row.get("counter_action_names", "")).split("|")[0]
-
-        ranked_rows = [ground_row, recovery_row, None] if defender_entry_state == "fallen" else [active_row, fallback_row, recovery_row]
-        ranked_layers = ["ground", "recovery", "inactive"] if defender_entry_state == "fallen" else ["active", "fallback", "recovery"]
-        for index, (defense_row, layer_name) in enumerate(zip(ranked_rows, ranked_layers, strict=True), start=1):
+        ranked_rows = [ground_row, recovery_row, None] if attack_entry_state == "fallen" else [active_row, fallback_row, recovery_row]
+        for index, defense_row in enumerate(ranked_rows, start=1):
             if defense_row is None:
                 row_record[f"defense_id_r{index}"] = ""
                 row_record[f"defense_name_r{index}"] = ""
@@ -403,7 +292,16 @@ def build_matchup_outputs(
             row_record[f"counter_window_r{index}"] = float(defense_row["counter_window"])
             row_record[f"counter_prob_r{index}"] = float(defense_row["counter_prob_effective"])
             row_record[f"fall_risk_r{index}"] = float(defense_row["p_fall"])
-            row_record[f"defense_score_r{index}"] = _layer_score(defense_row, layer_name)
+            row_record[f"defense_score_r{index}"] = float(
+                defense_row["fallback_score"]
+                if attack_entry_state == "fallen" and index == 1
+                else 1.0 - float(defense_row["exec_time_def"]) / max(float(group["exec_time_def"].max()), 1e-6)
+                if attack_entry_state == "fallen" and index == 2
+                else defense_row["proposed_score"]
+                if index == 1
+                else defense_row["fallback_score"] if index == 2
+                else 1.0 - float(defense_row["exec_time_def"]) / max(float(group["exec_time_def"].max()), 1e-6)
+            )
             row_record[f"counter_action_id_r{index}"] = counter_action_id
             row_record[f"counter_action_name_r{index}"] = counter_action_names.split("|")[0] if counter_action_names else ""
             row_record[f"counter_action_utility_r{index}"] = float(defense_row.get("counter_tau_norm", 0.0))
@@ -413,12 +311,20 @@ def build_matchup_outputs(
                     "action_id": action_id,
                     "action_name": action_row["action_name"],
                     "priority_rank": index,
-                    "layer_name": layer_name,
                     "defense_id": defense_row["defense_id"],
                     "defense_name": defense_row["defense_name"],
                     "defense_category": defense_row["defense_category"],
                     "defense_role": defense_row["defense_role"],
-                    "defense_score": _layer_score(defense_row, layer_name),
+                    "defense_score": float(
+                        defense_row["fallback_score"]
+                        if attack_entry_state == "fallen" and index == 1
+                        else 1.0 - float(defense_row["exec_time_def"]) / max(float(group["exec_time_def"].max()), 1e-6)
+                        if attack_entry_state == "fallen" and index == 2
+                        else defense_row["proposed_score"]
+                        if index == 1
+                        else defense_row["fallback_score"] if index == 2
+                        else 1.0 - float(defense_row["exec_time_def"]) / max(float(group["exec_time_def"].max()), 1e-6)
+                    ),
                     "block_prob": float(defense_row["p_success"]),
                     "counter_window": float(defense_row["counter_window"]),
                     "fall_risk": float(defense_row["p_fall"]),
@@ -427,46 +333,27 @@ def build_matchup_outputs(
                 }
             )
 
-        method1_top = _method_top(group, "method1_score")
-        method2_top = _method_top(group, "method2_score")
-        method3_top = _method_top(group, "method3_score")
-        method1_id, method1_cat = _summary_method_record(method1_top)
-        method2_id, method2_cat = _summary_method_record(method2_top)
-        method3_id, method3_cat = _summary_method_record(method3_top)
-
+        method1_top = group.sort_values("method1_score", ascending=False).iloc[0]
+        method2_top = group.sort_values("method2_score", ascending=False).iloc[0]
+        method3_top = group.sort_values("method3_score", ascending=False).iloc[0]
         method_summary_records.append(
             {
                 "action_id": action_id,
                 "action_name": action_row["action_name"],
-                "method1_top1_defense": method1_id,
-                "method1_top1_category": method1_cat,
-                "method2_top1_defense": method2_id,
-                "method2_top1_category": method2_cat,
-                "method3_top1_defense": method3_id,
-                "method3_top1_category": method3_cat,
+                "method1_top1_defense": method1_top["defense_id"],
+                "method2_top1_defense": method2_top["defense_id"],
+                "method3_top1_defense": method3_top["defense_id"],
                 "method4_top1_defense": (
-                    active_row["defense_id"] if active_row is not None else ground_row["defense_id"] if ground_row is not None else ""
+                    active_row["defense_id"]
+                    if active_row is not None
+                    else ground_row["defense_id"] if ground_row is not None else ""
                 ),
-                "method4_has_active": active_row is not None,
-                "method4_has_ground": ground_row is not None,
                 "method4_active_top1": "" if active_row is None else active_row["defense_id"],
-                "method4_active_role": "" if active_row is None else active_row["defense_role"],
-                "method4_active_category": "" if active_row is None else active_row["defense_category"],
-                "method4_active_score": _layer_score(active_row, "active"),
-                "method4_active_confidence": _active_confidence_label(active_row),
-                "method4_fallback_top1": "" if fallback_row is None else fallback_row["defense_id"],
-                "method4_fallback_role": "" if fallback_row is None else fallback_row["defense_role"],
-                "method4_fallback_category": "" if fallback_row is None else fallback_row["defense_category"],
-                "method4_fallback_score": _layer_score(fallback_row, "fallback"),
                 "method4_ground_top1": "" if ground_row is None else ground_row["defense_id"],
-                "method4_ground_role": "" if ground_row is None else ground_row["defense_role"],
-                "method4_ground_category": "" if ground_row is None else ground_row["defense_category"],
-                "method4_ground_score": _layer_score(ground_row, "ground"),
+                "method4_fallback_top1": "" if fallback_row is None else fallback_row["defense_id"],
                 "method4_recovery_if_needed": "" if recovery_row is None else recovery_row["defense_id"],
-                "method4_recovery_role": "" if recovery_row is None else recovery_row["defense_role"],
-                "method4_recovery_category": "" if recovery_row is None else recovery_row["defense_category"],
-                "method4_recovery_score": _layer_score(recovery_row, "recovery"),
-                "method4_note": closure_note,
+                "method4_active_role": "" if active_row is None else active_row["defense_role"],
+                "method4_fallback_role": "" if fallback_row is None else fallback_row["defense_role"],
             }
         )
         matchup_records.append(row_record)

@@ -1,0 +1,5 @@
+﻿scope_name,pair_count,family_rule_hit_rate,route_rule_hit_rate,geo_cap_rate,missing_family_pairs,missing_route_pairs,capped_pairs
+all_pairs,286,1.0,0.8461538461538461,0.06993006993006994,0,24,20
+active_pool,169,1.0,1.0,0.09467455621301775,0,0,16
+fallback_pool,91,1.0,0.6923076923076923,0.04395604395604396,0,12,4
+final_active_top1,13,1.0,1.0,0.0,0,0,0

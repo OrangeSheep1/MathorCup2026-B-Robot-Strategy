@@ -1,16 +1,13 @@
-"""Q2 图表输出模块。"""
+"""Q2 plotting utilities."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib import cm
 from matplotlib.lines import Line2D
 import numpy as np
 import pandas as pd
-from scipy.cluster.hierarchy import dendrogram, linkage
-from scipy.interpolate import griddata
 
 from src.q1.plot import FIGURE_DPI, configure_fonts
 
@@ -18,7 +15,7 @@ from src.q1.plot import FIGURE_DPI, configure_fonts
 TITLE_SIZE = 15
 LABEL_SIZE = 12
 TICK_SIZE = 10
-TEXT_SIZE = 10
+TEXT_SIZE = 9
 
 DEFENSE_COLORS = {
     "block": "#285EAD",
@@ -27,102 +24,64 @@ DEFENSE_COLORS = {
     "balance": "#805AD5",
     "ground": "#C53030",
     "combo": "#0F766E",
+    "NA": "#94A3B8",
 }
 
+DISPLAY_EMPTY = "\u65e0"
+DISPLAY_NOT_APPLICABLE = "\u2014"
+NOT_APPLICABLE_COLOR = "#E2E8F0"
+
 METHOD_LABELS = {
-    "method1": "方法一",
-    "method2": "方法二",
-    "method3": "方法三",
-    "method4": "方法四",
+    "method1": "\u65b9\u6cd5\u4e00",
+    "method2": "\u65b9\u6cd5\u4e8c",
+    "method3": "\u65b9\u6cd5\u4e09",
+    "method4": "\u65b9\u6cd5\u56db",
+}
+
+CATEGORY_LABELS = {
+    "block": "\u683c\u6321",
+    "evade": "\u95ea\u907f",
+    "posture": "\u59ff\u6001\u7f13\u51b2",
+    "balance": "\u5e73\u8861\u8c03\u6574",
+    "ground": "\u5730\u9762\u9632\u62a4",
+    "combo": "\u7ec4\u5408\u9632\u5b88",
+    "NA": "\u65e0\u7ed3\u679c",
+    "not_applicable": "\u4e0d\u9002\u7528",
+}
+
+LAYER_LABELS = {
+    "active": "\u4e3b\u9632\u5b88",
+    "fallback": "\u4fdd\u5e95\u54cd\u5e94",
+    "ground": "\u5730\u9762\u54cd\u5e94",
+    "recovery": "\u6062\u590d\u52a8\u4f5c",
+}
+
+SCATTER_LABEL_OFFSETS = {
+    "A01": (0.010, -0.012),
+    "A02": (-0.040, 0.010),
+    "A03": (0.012, -0.014),
+    "A04": (-0.045, -0.010),
+    "A05": (0.012, 0.015),
+    "A06": (-0.040, 0.014),
+    "A07": (0.010, -0.018),
+    "A08": (-0.055, -0.006),
+    "A09": (0.012, 0.022),
+    "A10": (0.012, -0.018),
+    "A11": (-0.048, 0.012),
+    "A12": (0.010, 0.010),
+    "A13": (-0.048, -0.012),
 }
 
 
 def _set_axis_style(ax: plt.Axes, show_grid: bool = True) -> None:
-    """统一坐标轴风格。"""
-
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.spines["left"].set_linewidth(0.85)
-    ax.spines["bottom"].set_linewidth(0.85)
     if show_grid:
-        ax.grid(linestyle="--", alpha=0.14)
+        ax.grid(linestyle="--", alpha=0.20)
     ax.tick_params(labelsize=TICK_SIZE)
 
 
-def _smooth_curve(x0: float, x1: float, y0: float, y1: float, points: int = 80) -> tuple[np.ndarray, np.ndarray]:
-    """生成平滑连线。"""
-
-    t = np.linspace(0.0, 1.0, points)
-    x = x0 + (x1 - x0) * t
-    s = 3.0 * t**2 - 2.0 * t**3
-    y = y0 + (y1 - y0) * s
-    return x, y
-
-
-def _build_method_top_table(evaluated_pairs: pd.DataFrame) -> pd.DataFrame:
-    """抽取四种方法的 Top1 防守。"""
-
-    method_specs = [
-        ("method1", "method1_score"),
-        ("method2", "method2_score"),
-        ("method3", "method3_score"),
-        ("method4", "proposed_score"),
-    ]
-    records: list[dict[str, object]] = []
-    for action_id, group in evaluated_pairs.groupby("action_id", sort=False):
-        record = {"action_id": action_id, "action_name": group.iloc[0]["action_name"]}
-        for method_key, score_column in method_specs:
-            top_row = group.sort_values(score_column, ascending=False).iloc[0]
-            record[f"{method_key}_defense_id"] = top_row["defense_id"]
-            record[f"{method_key}_score"] = float(top_row[score_column])
-            record[f"{method_key}_category"] = top_row["defense_category"]
-        records.append(record)
-    return pd.DataFrame(records)
-
-
-def plot_hierarchical_utility_matrix(
-    evaluated_pairs: pd.DataFrame,
-    counter_chain: pd.DataFrame,
-    output_path: str | Path,
-) -> Path:
-    """绘制简洁版聚类效用矩阵。"""
-
-    zh_font, _ = configure_fonts()
-    pivot = evaluated_pairs.pivot(index="action_id", columns="defense_id", values="proposed_score").fillna(0.0)
-    row_linkage = linkage(pivot.values, method="ward", optimal_ordering=True)
-    col_linkage = linkage(pivot.values.T, method="ward", optimal_ordering=True)
-    row_order = dendrogram(row_linkage, no_plot=True)["leaves"]
-    col_order = dendrogram(col_linkage, no_plot=True)["leaves"]
-    ordered = pivot.iloc[row_order, col_order]
-
-    row_attack_ids = ordered.index.tolist()
-    col_defense_ids = ordered.columns.tolist()
-    top1 = counter_chain[counter_chain["priority_rank"] == 1]
-
-    figure, ax = plt.subplots(figsize=(7.4, 5.8))
-    image = ax.imshow(ordered.values, cmap="magma", aspect="auto")
-    ax.set_xticks(np.arange(len(col_defense_ids)))
-    ax.set_xticklabels(col_defense_ids, rotation=55, ha="right", fontsize=TICK_SIZE)
-    ax.set_yticks(np.arange(len(row_attack_ids)))
-    ax.set_yticklabels(row_attack_ids, fontsize=TICK_SIZE)
-    ax.set_xlabel("防守动作", fontproperties=zh_font, fontsize=LABEL_SIZE)
-    ax.set_ylabel("攻击动作", fontproperties=zh_font, fontsize=LABEL_SIZE)
-    ax.set_title("Q2 主模型攻防效用矩阵", fontproperties=zh_font, fontsize=TITLE_SIZE, pad=8)
-
-    for row_index, attack_id in enumerate(row_attack_ids):
-        matched = top1[top1["action_id"] == attack_id]
-        if matched.empty:
-            continue
-        defense_id = str(matched.iloc[0]["defense_id"])
-        if defense_id not in col_defense_ids:
-            continue
-        col_index = col_defense_ids.index(defense_id)
-        ax.scatter(col_index, row_index, marker="*", s=80, color="white", edgecolors="#111827", linewidths=0.5)
-
-    colorbar = figure.colorbar(image, ax=ax, fraction=0.036, pad=0.02)
-    colorbar.set_label("主模型得分", fontproperties=zh_font, fontsize=LABEL_SIZE - 1)
-    colorbar.ax.tick_params(labelsize=TICK_SIZE)
-
+def _save(figure: plt.Figure, output_path: str | Path) -> Path:
     output = Path(output_path)
     figure.tight_layout()
     figure.savefig(output, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
@@ -130,320 +89,355 @@ def plot_hierarchical_utility_matrix(
     return output
 
 
-def plot_defense_surface(evaluated_pairs: pd.DataFrame, output_path: str | Path) -> Path:
-    """绘制二维等高响应面图。"""
+def _set_legend_font(legend, zh_font) -> None:
+    if legend is None:
+        return
+    for text in legend.get_texts():
+        text.set_fontproperties(zh_font)
+        text.set_fontsize(TEXT_SIZE)
 
-    zh_font, _ = configure_fonts()
-    x = evaluated_pairs["tau_norm"].to_numpy(dtype=float)
-    y = evaluated_pairs["p_fall"].to_numpy(dtype=float)
-    z = evaluated_pairs["proposed_score"].to_numpy(dtype=float)
 
-    grid_x, grid_y = np.meshgrid(
-        np.linspace(0.0, 1.0, 120),
-        np.linspace(0.0, min(1.0, max(0.12, float(y.max()) + 0.05)), 120),
+def _category_legend(include_na: bool = True, include_not_applicable: bool = False) -> list[Line2D]:
+    categories = ["block", "evade", "posture", "balance", "ground", "combo"]
+    if include_na:
+        categories.append("NA")
+    if include_not_applicable:
+        categories.append("not_applicable")
+
+    handles: list[Line2D] = []
+    for category in categories:
+        marker_color = NOT_APPLICABLE_COLOR if category == "not_applicable" else DEFENSE_COLORS.get(category, "#94A3B8")
+        handles.append(
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                linestyle="",
+                markersize=8,
+                markerfacecolor=marker_color,
+                markeredgecolor="#111827",
+                label=CATEGORY_LABELS[category],
+            )
+        )
+    return handles
+
+
+def _legend_outside(ax: plt.Axes, figure: plt.Figure, zh_font, include_na: bool = True, include_not_applicable: bool = False) -> None:
+    legend = ax.legend(
+        handles=_category_legend(include_na=include_na, include_not_applicable=include_not_applicable),
+        frameon=False,
+        loc="upper left",
+        bbox_to_anchor=(1.01, 1.0),
+        borderaxespad=0.0,
+        ncol=1,
     )
-    grid_z = griddata((x, y), z, (grid_x, grid_y), method="linear")
-    fill_z = griddata((x, y), z, (grid_x, grid_y), method="nearest")
-    grid_z = np.where(np.isnan(grid_z), fill_z, grid_z)
+    _set_legend_font(legend, zh_font)
+    figure.subplots_adjust(right=0.78)
 
-    top1 = evaluated_pairs[evaluated_pairs["rank"] == 1].copy()
 
-    figure, ax = plt.subplots(figsize=(7.0, 5.4))
-    contour = ax.contourf(grid_x, grid_y, grid_z, levels=14, cmap="Spectral_r")
-    ax.contour(grid_x, grid_y, grid_z, levels=8, colors="white", linewidths=0.45, alpha=0.55)
-    ax.scatter(x, y, s=10, color="#334155", alpha=0.18)
+def _fallen_context(row: pd.Series) -> bool:
+    note = str(row.get("method4_note", "")).strip()
+    return note.startswith("fallen_")
 
-    marker_map = {
-        "block": "o",
-        "evade": "^",
-        "posture": "s",
-        "balance": "D",
-        "ground": "P",
-        "combo": "X",
-    }
-    for defense_category, marker in marker_map.items():
-        subset = top1[top1["defense_category"] == defense_category]
-        if subset.empty:
-            continue
+
+def _method_cell_state(row: pd.Series, method_key: str) -> tuple[str, str]:
+    if method_key == "method4":
+        defense_id = str(row.get("method4_active_top1", "")).strip()
+        category = str(row.get("method4_active_category", "")).strip() or "NA"
+        if defense_id == "" and _fallen_context(row):
+            defense_id = str(row.get("method4_ground_top1", "")).strip()
+            category = str(row.get("method4_ground_category", "")).strip() or "NA"
+    else:
+        defense_id = str(row.get(f"{method_key}_top1_defense", "")).strip()
+        category = str(row.get(f"{method_key}_top1_category", "")).strip() or "NA"
+
+    if defense_id == "":
+        return DISPLAY_EMPTY, "NA"
+    return defense_id, category if category in DEFENSE_COLORS else "NA"
+
+
+def _layer_cell_state(row: pd.Series, layer_key: str, defense_column: str, category_column: str) -> tuple[str, str, str]:
+    defense_id = str(row.get(defense_column, "")).strip()
+    category = str(row.get(category_column, "")).strip() or "NA"
+    is_fallen = _fallen_context(row)
+
+    if layer_key == "active":
+        applicable = not is_fallen
+    elif layer_key == "fallback":
+        applicable = not is_fallen
+    elif layer_key == "ground":
+        applicable = is_fallen
+    elif layer_key == "recovery":
+        applicable = is_fallen
+    else:
+        applicable = True
+
+    if not applicable:
+        return DISPLAY_NOT_APPLICABLE, "not_applicable", "not_applicable"
+    if defense_id == "":
+        return DISPLAY_EMPTY, "NA", "empty"
+    return defense_id, category if category in DEFENSE_COLORS else "NA", "filled"
+
+
+def plot_primary_utility_matrix(evaluated_pairs: pd.DataFrame, output_path: str | Path) -> Path:
+    zh_font, _ = configure_fonts()
+    active_pool = evaluated_pairs[evaluated_pairs["primary_role_feasible"]].copy()
+    pivot = active_pool.pivot(index="action_id", columns="defense_id", values="primary_score")
+    pivot = pivot.dropna(axis=0, how="all").dropna(axis=1, how="all")
+
+    masked_values = np.ma.masked_where(pivot.isna().values, pivot.fillna(0.0).values)
+    cmap = plt.cm.get_cmap("magma").copy()
+    cmap.set_bad("#E2E8F0")
+
+    figure, ax = plt.subplots(figsize=(10.5, 6.2))
+    image = ax.imshow(masked_values, cmap=cmap, aspect="auto")
+    ax.set_xticks(np.arange(len(pivot.columns)))
+    ax.set_xticklabels(pivot.columns.tolist(), rotation=60, ha="right", fontsize=TICK_SIZE)
+    ax.set_yticks(np.arange(len(pivot.index)))
+    ax.set_yticklabels(pivot.index.tolist(), fontsize=TICK_SIZE)
+    ax.set_xlabel("\u9632\u5b88\u52a8\u4f5c", fontproperties=zh_font, fontsize=LABEL_SIZE)
+    ax.set_ylabel("\u653b\u51fb\u52a8\u4f5c", fontproperties=zh_font, fontsize=LABEL_SIZE)
+    ax.set_title("Q2 \u4e3b\u9632\u5b88\u5c42\u6548\u7528\u77e9\u9635", fontproperties=zh_font, fontsize=TITLE_SIZE, y=1.08)
+    ax.text(
+        0.0,
+        1.01,
+        "\u6ce8\uff1a\u4ec5\u7ad9\u7acb\u5165\u573a\u7684\u4e3b\u9632\u5b88\u5019\u9009\u8fdb\u5165\u77e9\u9635\uff1bD18/D19 \u7b49\u5730\u9762/\u6062\u590d\u52a8\u4f5c\u5c5e\u6761\u4ef6\u5c42\uff0c\u4e0d\u5728\u672c\u56fe\u8bc4\u5206\u3002",
+        transform=ax.transAxes,
+        fontproperties=zh_font,
+        fontsize=TEXT_SIZE,
+        color="#475569",
+    )
+    colorbar = figure.colorbar(image, ax=ax, fraction=0.04, pad=0.02)
+    colorbar.ax.tick_params(labelsize=TICK_SIZE)
+    colorbar.set_label("\u4e3b\u9632\u5b88\u8bc4\u5206", fontproperties=zh_font, fontsize=LABEL_SIZE - 1)
+    return _save(figure, output_path)
+
+
+def plot_defense_surface(matchup_table: pd.DataFrame, evaluated_pairs: pd.DataFrame, output_path: str | Path) -> Path:
+    zh_font, _ = configure_fonts()
+    lookup = matchup_table[["action_id", "active_top1_defense_id"]].copy()
+    lookup = lookup[lookup["active_top1_defense_id"].astype(str).ne("")]
+    top1 = evaluated_pairs.merge(
+        lookup,
+        left_on=["action_id", "defense_id"],
+        right_on=["action_id", "active_top1_defense_id"],
+        how="inner",
+    )
+
+    figure, ax = plt.subplots(figsize=(8.8, 5.8))
+    for category, subset in top1.groupby("defense_category"):
         ax.scatter(
-            subset["tau_norm"],
+            subset["p_success"],
             subset["p_fall"],
-            s=48,
-            marker=marker,
-            color=DEFENSE_COLORS.get(defense_category, "#4A5568"),
+            s=92,
+            color=DEFENSE_COLORS.get(category, "#4A5568"),
+            alpha=0.9,
             edgecolors="#111827",
-            linewidths=0.45,
-            alpha=0.95,
+            linewidths=0.5,
         )
+        for _, row in subset.iterrows():
+            dx, dy = SCATTER_LABEL_OFFSETS.get(str(row["action_id"]), (0.010, 0.006))
+            ax.text(
+                float(row["p_success"]) + dx,
+                float(row["p_fall"]) + dy,
+                str(row["action_id"]),
+                fontsize=TEXT_SIZE,
+                fontproperties=zh_font,
+            )
 
-    ax.set_xlabel("攻击强度归一值", fontproperties=zh_font, fontsize=LABEL_SIZE)
-    ax.set_ylabel("防守倒地风险", fontproperties=zh_font, fontsize=LABEL_SIZE)
-    ax.set_title("Q2 主模型防守效用响应面", fontproperties=zh_font, fontsize=TITLE_SIZE, pad=8)
+    ax.set_xlabel("\u4e3b\u9632\u5b88\u6210\u529f\u7387", fontproperties=zh_font, fontsize=LABEL_SIZE)
+    ax.set_ylabel("\u9632\u5b88\u540e\u5012\u5730\u98ce\u9669", fontproperties=zh_font, fontsize=LABEL_SIZE)
+    ax.set_title("Q2 \u4e3b\u9632\u5b88 Top1 \u6210\u529f\u7387\u2014\u98ce\u9669\u6563\u70b9\u56fe", fontproperties=zh_font, fontsize=TITLE_SIZE)
     _set_axis_style(ax)
-
-    colorbar = figure.colorbar(contour, ax=ax, fraction=0.046, pad=0.03)
-    colorbar.set_label("综合防守得分", fontproperties=zh_font, fontsize=LABEL_SIZE - 1)
-    colorbar.ax.tick_params(labelsize=TICK_SIZE)
-
-    legend_handles = [
-        Line2D(
-            [0],
-            [0],
-            marker=marker_map[key],
-            color="w",
-            label=key,
-            markerfacecolor=DEFENSE_COLORS[key],
-            markeredgecolor="#111827",
-            markeredgewidth=0.45,
-            markersize=6,
-        )
-        for key in marker_map
-        if not top1[top1["defense_category"] == key].empty
-    ]
-    if legend_handles:
-        ax.legend(handles=legend_handles, loc="upper right", frameon=False, fontsize=TEXT_SIZE - 1, ncol=2)
-
-    output = Path(output_path)
-    figure.tight_layout()
-    figure.savefig(output, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
-    plt.close(figure)
-    return output
+    _legend_outside(ax, figure, zh_font, include_na=False)
+    return _save(figure, output_path)
 
 
-def plot_decision_waterfall(
-    matchup_table: pd.DataFrame,
-    evaluated_pairs: pd.DataFrame,
-    output_path: str | Path,
-) -> Path:
-    """绘制简洁版攻击到 Top1 防守映射图。"""
-
+def plot_parallel_metrics(matchup_table: pd.DataFrame, evaluated_pairs: pd.DataFrame, output_path: str | Path) -> Path:
     zh_font, _ = configure_fonts()
-    rows = []
-    for _, row in matchup_table.iterrows():
-        defense_id = row["defense_id_r1"]
-        matched = evaluated_pairs[
-            (evaluated_pairs["action_id"] == row["action_id"]) & (evaluated_pairs["defense_id"] == defense_id)
-        ]
-        if matched.empty:
-            continue
-        rows.append(matched.iloc[0])
-    top1 = pd.DataFrame(rows).sort_values(by=["attack_utility", "proposed_score"], ascending=[False, False]).reset_index(drop=True)
+    lookup = matchup_table[["action_id", "active_top1_defense_id"]].copy()
+    lookup = lookup[lookup["active_top1_defense_id"].astype(str).ne("")]
+    top1 = evaluated_pairs.merge(
+        lookup,
+        left_on=["action_id", "defense_id"],
+        right_on=["action_id", "active_top1_defense_id"],
+        how="inner",
+    ).sort_values("action_id")
 
-    attack_nodes = top1["action_id"].tolist()
-    defense_nodes = (
-        top1.groupby("defense_id")["proposed_score"]
-        .mean()
-        .sort_values(ascending=False)
-        .index.tolist()
-    )
+    metric_labels = ["成功率", "1-剩余伤害", "反击窗口", "1-倒地风险"]
+    metric_columns = ["p_success", "defense_harm_safe", "counter_window_norm", "stability_safe"]
+    x_positions = np.arange(len(metric_columns))
 
-    def _positions(labels: list[str], top: float = 0.92, bottom: float = 0.08) -> dict[str, float]:
-        if len(labels) == 1:
-            return {labels[0]: (top + bottom) / 2.0}
-        values = np.linspace(top, bottom, len(labels))
-        return {label: float(value) for label, value in zip(labels, values, strict=True)}
-
-    attack_pos = _positions(attack_nodes)
-    defense_pos = _positions(defense_nodes)
-
-    figure, ax = plt.subplots(figsize=(7.6, 5.8))
-    ax.set_xlim(0.0, 1.0)
-    ax.set_ylim(0.0, 1.0)
-    ax.axis("off")
-
-    x_left = 0.18
-    x_right = 0.82
-    node_width = 0.12
-    node_height = 0.034
-
+    figure, ax = plt.subplots(figsize=(9.5, 5.8))
     for _, row in top1.iterrows():
-        x_curve, y_curve = _smooth_curve(
-            x_left + node_width / 2.0,
-            x_right - node_width / 2.0,
-            attack_pos[str(row["action_id"])],
-            defense_pos[str(row["defense_id"])],
-        )
+        values = [float(row[column]) for column in metric_columns]
+        category = str(row["defense_category"])
+        color = DEFENSE_COLORS.get(category, "#4A5568")
         ax.plot(
-            x_curve,
-            y_curve,
-            color=DEFENSE_COLORS.get(str(row["defense_category"]), "#4A5568"),
-            linewidth=1.0 + 3.0 * float(row["proposed_utility"]),
-            alpha=0.42,
-            solid_capstyle="round",
-        )
-
-    for attack_id in attack_nodes:
-        rect = plt.Rectangle(
-            (x_left - node_width / 2.0, attack_pos[attack_id] - node_height / 2.0),
-            node_width,
-            node_height,
-            facecolor="#F8FAFC",
-            edgecolor="#1F2937",
-            linewidth=0.55,
-        )
-        ax.add_patch(rect)
-        ax.text(x_left, attack_pos[attack_id], attack_id, ha="center", va="center", fontsize=TEXT_SIZE)
-
-    for defense_id in defense_nodes:
-        defense_category = str(top1.loc[top1["defense_id"] == defense_id, "defense_category"].iloc[0])
-        rect = plt.Rectangle(
-            (x_right - node_width / 2.0, defense_pos[defense_id] - node_height / 2.0),
-            node_width,
-            node_height,
-            facecolor=DEFENSE_COLORS.get(defense_category, "#4A5568"),
-            edgecolor="#1F2937",
-            linewidth=0.55,
-        )
-        ax.add_patch(rect)
-        ax.text(x_right, defense_pos[defense_id], defense_id, ha="center", va="center", fontsize=TEXT_SIZE, color="white")
-
-    ax.text(x_left, 0.975, "攻击", ha="center", va="top", fontproperties=zh_font, fontsize=LABEL_SIZE)
-    ax.text(x_right, 0.975, "Top1 防守", ha="center", va="top", fontproperties=zh_font, fontsize=LABEL_SIZE)
-    ax.set_title("Q2 攻击到 Top1 防守映射图", fontproperties=zh_font, fontsize=TITLE_SIZE, pad=8)
-
-    output = Path(output_path)
-    figure.tight_layout()
-    figure.savefig(output, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
-    plt.close(figure)
-    return output
-
-
-def plot_parallel_bands(evaluated_pairs: pd.DataFrame, output_path: str | Path) -> Path:
-    """绘制简洁版平行坐标图。"""
-
-    zh_font, _ = configure_fonts()
-    metric_names = ["拦截概率", "防守安全性", "反击窗口", "稳定性"]
-    metric_frame = pd.DataFrame(
-        {
-            "拦截概率": evaluated_pairs["p_block"],
-            "防守安全性": 1.0 - evaluated_pairs["defense_damage"],
-            "反击窗口": evaluated_pairs["counter_window_norm"],
-            "稳定性": 1.0 - evaluated_pairs["p_fall"],
-        }
-    )
-    metric_frame["score_bin"] = pd.qcut(
-        evaluated_pairs["proposed_score"].rank(method="first"),
-        q=5,
-        labels=["Q1", "Q2", "Q3", "Q4", "Q5"],
-    )
-
-    x_positions = np.arange(len(metric_names))
-    palette = cm.get_cmap("Spectral_r", 5)
-
-    figure, ax = plt.subplots(figsize=(7.2, 5.3))
-    for x_pos in x_positions:
-        ax.axvline(x=x_pos, color="#CBD5E0", linewidth=0.8, alpha=0.85)
-
-    for index, score_bin in enumerate(["Q1", "Q2", "Q3", "Q4", "Q5"]):
-        subset = metric_frame[metric_frame["score_bin"] == score_bin]
-        means = subset[metric_names].mean().to_numpy(dtype=float)
-        stds = subset[metric_names].std(ddof=0).fillna(0.0).to_numpy(dtype=float)
-        color = palette(index)
-        ax.plot(x_positions, means, color=color, linewidth=2.4, alpha=0.96, label=score_bin)
-        ax.fill_between(
             x_positions,
-            np.clip(means - stds, 0.0, 1.0),
-            np.clip(means + stds, 0.0, 1.0),
+            values,
+            marker="o",
+            markersize=4.8,
+            linewidth=1.8,
             color=color,
-            alpha=0.12,
+            alpha=0.72,
+        )
+        ax.text(
+            x_positions[-1] + 0.05,
+            values[-1],
+            str(row["action_id"]),
+            va="center",
+            fontsize=TEXT_SIZE,
+            color=color,
+            fontproperties=zh_font,
         )
 
+    ax.set_xlim(-0.08, len(metric_columns) - 0.70)
+    ax.set_ylim(-0.02, 1.04)
     ax.set_xticks(x_positions)
-    ax.set_xticklabels(metric_names, fontproperties=zh_font, fontsize=LABEL_SIZE - 1)
-    ax.set_ylim(0.0, 1.02)
-    ax.set_ylabel("归一化维度值", fontproperties=zh_font, fontsize=LABEL_SIZE)
-    ax.set_title("Q2 防守效用平行坐标图", fontproperties=zh_font, fontsize=TITLE_SIZE, pad=8)
+    ax.set_xticklabels(metric_labels, fontproperties=zh_font, fontsize=LABEL_SIZE - 1, rotation=15)
+    ax.set_ylabel("归一化指标值", fontproperties=zh_font, fontsize=LABEL_SIZE)
+    ax.set_title("Q2 主防守 Top1 指标平行对比图", fontproperties=zh_font, fontsize=TITLE_SIZE)
     _set_axis_style(ax)
-
-    legend = ax.legend(title="得分分位", frameon=False, fontsize=TEXT_SIZE - 1, loc="upper left", ncol=3)
-    if legend is not None:
-        legend.get_title().set_fontproperties(zh_font)
-
-    output = Path(output_path)
-    figure.tight_layout()
-    figure.savefig(output, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
-    plt.close(figure)
-    return output
+    _legend_outside(ax, figure, zh_font, include_na=False)
+    return _save(figure, output_path)
 
 
-def plot_method_comparison(evaluated_pairs: pd.DataFrame, output_path: str | Path) -> Path:
-    """绘制四方法 Top1 防守对比图。"""
-
+def plot_decision_waterfall(matchup_table: pd.DataFrame, output_path: str | Path) -> Path:
     zh_font, _ = configure_fonts()
-    top_table = _build_method_top_table(evaluated_pairs)
-    attacks = top_table.sort_values(by="method4_score", ascending=False)["action_id"].tolist()
+    table = matchup_table.copy().sort_values("active_top1_score", ascending=False).reset_index(drop=True)
+    display_label = table["active_top1_defense_id"].astype(str).replace("", DISPLAY_EMPTY)
+
+    figure, ax = plt.subplots(figsize=(11.0, 6.0))
+    y = np.arange(len(table))
+    bar_colors = [
+        DEFENSE_COLORS.get("NA" if did == DISPLAY_EMPTY else category, "#285EAD")
+        for did, category in zip(display_label, table["active_top1_category"].fillna("NA"), strict=True)
+    ]
+    ax.barh(y, np.maximum(table["active_top1_score"].astype(float), 0.0), color=bar_colors, alpha=0.88)
+    ax.set_yticks(y)
+    ax.set_yticklabels([f"{aid}->{did}" for aid, did in zip(table["action_id"], display_label, strict=True)], fontsize=TICK_SIZE)
+    for label in ax.get_yticklabels():
+        label.set_fontproperties(zh_font)
+    ax.invert_yaxis()
+    ax.set_xlabel("\u4e3b\u9632\u5b88\u8bc4\u5206", fontproperties=zh_font, fontsize=LABEL_SIZE)
+    ax.set_title("Q2 \u653b\u51fb\u52a8\u4f5c\u5230\u4e3b\u9632\u5b88 Top1 \u7684\u6620\u5c04\u56fe", fontproperties=zh_font, fontsize=TITLE_SIZE)
+    _set_axis_style(ax)
+    _legend_outside(ax, figure, zh_font, include_na=True)
+    return _save(figure, output_path)
+
+
+def plot_method_comparison(method_summary: pd.DataFrame, output_path: str | Path) -> Path:
+    zh_font, _ = configure_fonts()
+    table = method_summary.copy()
+    attacks = table["action_id"].tolist()
     methods = ["method1", "method2", "method3", "method4"]
-    x_positions = np.array([0.0, 1.0, 2.0, 3.0], dtype=float)
-    marker_size = 240
+    figure, ax = plt.subplots(figsize=(11.0, 6.2))
+    x_positions = np.arange(len(methods))
 
-    figure, ax = plt.subplots(figsize=(7.6, 5.2))
-
-    for x_pos in x_positions:
-        ax.axvline(x=x_pos, color="#E2E8F0", linewidth=0.9, zorder=0)
-
-    for y_index, attack_id in enumerate(attacks):
-        row = top_table.loc[top_table["action_id"] == attack_id].iloc[0]
+    for y_index, (_, row) in enumerate(table.iterrows()):
         for x_index, method_key in enumerate(methods):
-            defense_id = str(row[f"{method_key}_defense_id"])
-            defense_category = str(row[f"{method_key}_category"])
+            display_text, color_key = _method_cell_state(row, method_key)
+            marker_color = NOT_APPLICABLE_COLOR if color_key == "not_applicable" else DEFENSE_COLORS.get(color_key, "#94A3B8")
+            edge_color = "#CBD5E1" if color_key == "not_applicable" else "#111827"
             ax.scatter(
                 x_positions[x_index],
                 y_index,
-                s=marker_size,
-                color=DEFENSE_COLORS.get(defense_category, "#4A5568"),
-                edgecolors="#111827",
+                s=250,
+                color=marker_color,
+                edgecolors=edge_color,
                 linewidths=0.45,
-                alpha=0.96,
                 zorder=3,
             )
+            text_color = "#64748B" if color_key == "not_applicable" else "#1F2937" if color_key == "NA" else "white"
             ax.text(
                 x_positions[x_index],
                 y_index,
-                defense_id,
+                display_text,
                 ha="center",
                 va="center",
-                fontsize=TEXT_SIZE - 1,
-                color="white",
+                fontsize=TEXT_SIZE,
+                color=text_color,
                 weight="bold",
-                zorder=4,
+                fontproperties=zh_font,
             )
 
     ax.set_xticks(x_positions)
-    ax.set_xticklabels([METHOD_LABELS[item] for item in methods], fontproperties=zh_font, fontsize=LABEL_SIZE - 1)
+    ax.set_xticklabels([METHOD_LABELS[key] for key in methods], fontproperties=zh_font, fontsize=LABEL_SIZE - 1)
     ax.set_yticks(np.arange(len(attacks)))
-    ax.set_yticklabels(attacks, fontsize=LABEL_SIZE - 1)
+    ax.set_yticklabels(attacks, fontsize=TICK_SIZE)
+    for label in ax.get_yticklabels():
+        label.set_fontproperties(zh_font)
     ax.invert_yaxis()
-    ax.set_xlim(-0.55, 3.55)
-    ax.set_xlabel("评价方法", fontproperties=zh_font, fontsize=LABEL_SIZE)
-    ax.set_ylabel("攻击动作", fontproperties=zh_font, fontsize=LABEL_SIZE)
-    ax.set_title("Q2 四方法 Top1 防守对比图", fontproperties=zh_font, fontsize=TITLE_SIZE, pad=8)
+    ax.set_title("Q2 \u56db\u79cd\u65b9\u6cd5 Top1 \u54cd\u5e94\u5bf9\u6bd4\u56fe", fontproperties=zh_font, fontsize=TITLE_SIZE)
+    ax.set_xlabel("\u8bc4\u4f30\u65b9\u6cd5", fontproperties=zh_font, fontsize=LABEL_SIZE)
+    ax.set_ylabel("\u653b\u51fb\u52a8\u4f5c", fontproperties=zh_font, fontsize=LABEL_SIZE)
     _set_axis_style(ax)
+    _legend_outside(ax, figure, zh_font, include_na=True, include_not_applicable=True)
+    return _save(figure, output_path)
 
-    legend_handles = [
-        Line2D(
-            [0],
-            [0],
-            marker="o",
-            color="w",
-            label=key,
-            markerfacecolor=value,
-            markeredgecolor="#111827",
-            markeredgewidth=0.45,
-            markersize=6,
-        )
-        for key, value in DEFENSE_COLORS.items()
+
+def plot_layered_response_overview(method_summary: pd.DataFrame, output_path: str | Path) -> Path:
+    zh_font, _ = configure_fonts()
+    layers = [
+        ("active", "method4_active_top1", "method4_active_category"),
+        ("fallback", "method4_fallback_top1", "method4_fallback_category"),
+        ("ground", "method4_ground_top1", "method4_ground_category"),
+        ("recovery", "method4_recovery_if_needed", "method4_recovery_category"),
     ]
-    figure.legend(
-        handles=legend_handles,
-        loc="lower center",
-        bbox_to_anchor=(0.5, 0.01),
-        ncol=6,
-        frameon=False,
-        fontsize=TEXT_SIZE - 1,
-    )
 
-    output = Path(output_path)
-    figure.subplots_adjust(top=0.88, bottom=0.18, left=0.14, right=0.98)
-    figure.savefig(output, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
-    plt.close(figure)
-    return output
+    figure, ax = plt.subplots(figsize=(11.5, 6.2))
+    ax.set_xlim(-0.5, len(layers) - 0.5)
+    ax.set_ylim(-0.5, len(method_summary) - 0.5)
+
+    for y_index, (_, row) in enumerate(method_summary.iterrows()):
+        for x_index, (layer_key, column, category_column) in enumerate(layers):
+            display_text, color_key, state_kind = _layer_cell_state(row, layer_key, column, category_column)
+            if state_kind == "not_applicable":
+                ax.text(
+                    x_index,
+                    y_index,
+                    display_text,
+                    ha="center",
+                    va="center",
+                    fontsize=TEXT_SIZE + 1,
+                    color="#64748B",
+                    fontproperties=zh_font,
+                    bbox={"boxstyle": "round,pad=0.22", "facecolor": NOT_APPLICABLE_COLOR, "edgecolor": "none"},
+                )
+                continue
+
+            ax.scatter(
+                x_index,
+                y_index,
+                s=320,
+                color=DEFENSE_COLORS.get(color_key, "#CBD5E1"),
+                edgecolors="#111827",
+                linewidths=0.45,
+            )
+            text_color = "#1F2937" if color_key == "NA" else "white"
+            ax.text(
+                x_index,
+                y_index,
+                display_text,
+                ha="center",
+                va="center",
+                fontsize=TEXT_SIZE,
+                color=text_color,
+                weight="bold",
+                fontproperties=zh_font,
+            )
+
+    ax.set_xticks(np.arange(len(layers)))
+    ax.set_xticklabels([LAYER_LABELS[layer_key] for layer_key, _, _ in layers], fontproperties=zh_font, fontsize=LABEL_SIZE)
+    ax.set_yticks(np.arange(len(method_summary)))
+    ax.set_yticklabels(method_summary["action_id"].tolist(), fontsize=TICK_SIZE)
+    for label in ax.get_yticklabels():
+        label.set_fontproperties(zh_font)
+    ax.invert_yaxis()
+    ax.set_title("Q2 \u5206\u5c42\u54cd\u5e94\u603b\u89c8\u56fe", fontproperties=zh_font, fontsize=TITLE_SIZE)
+    ax.set_xlabel("\u54cd\u5e94\u5c42\u7ea7", fontproperties=zh_font, fontsize=LABEL_SIZE)
+    ax.set_ylabel("\u653b\u51fb\u52a8\u4f5c", fontproperties=zh_font, fontsize=LABEL_SIZE)
+    _set_axis_style(ax, show_grid=False)
+    _legend_outside(ax, figure, zh_font, include_na=True, include_not_applicable=True)
+    return _save(figure, output_path)

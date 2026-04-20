@@ -1,0 +1,133 @@
+contact_load_family,mechanism_tag,family_success_factor,family_damage_factor,source_type,notes
+upper_terminal,rigid_high_cross,0.95,0.92,derived_rule_contact_family,high compatibility for straight and arc punches
+upper_terminal,rigid_high_parry,0.92,0.88,derived_rule_contact_family,high compatibility for upper terminal punches
+upper_terminal,rigid_close_elbow,0.88,0.82,derived_rule_contact_family,close rigid elbow works well against upper terminal contact
+upper_terminal,rigid_low_block,0.20,0.18,derived_rule_contact_family,low block is poorly aligned with upper terminal contact
+upper_terminal,rigid_close_clamp,0.55,0.58,derived_rule_contact_family,close clamp can partially restrain arm attacks
+upper_terminal,evade_lateral,0.90,0.75,derived_rule_contact_family,lateral exit is very effective against upper terminal contact
+upper_terminal,evade_duck,0.42,0.30,derived_rule_contact_family,duck is situational against upper terminal contact
+upper_terminal,evade_back,0.70,0.60,derived_rule_contact_family,back step is usable but less ideal than lateral exit
+upper_terminal,evade_spin,0.60,0.48,derived_rule_contact_family,spin evade is secondary against upper terminal contact
+upper_terminal,evade_orbit,0.72,0.62,derived_rule_contact_family,orbit is moderate against wide upper attacks
+upper_terminal,posture_high_cover,0.86,0.78,derived_rule_contact_family,high cover reduces upper terminal damage
+upper_terminal,posture_torso_sink,0.30,0.35,derived_rule_contact_family,torso sink is not designed for head-line punches
+upper_terminal,posture_body_turn,0.58,0.56,derived_rule_contact_family,body turn can reduce target area against punches
+upper_terminal,balance_micro_comp,0.28,0.30,derived_rule_contact_family,micro balance correction is weak against direct punches
+upper_terminal,balance_soft_yield,0.40,0.46,derived_rule_contact_family,soft yield gives some relief but is not primary
+upper_terminal,balance_step_reset,0.36,0.42,derived_rule_contact_family,step reset helps but is not a direct punch answer
+upper_terminal,ground_transfer,0.05,0.05,derived_rule_contact_family,ground transfer is not feasible for standing upper attacks
+upper_terminal,recovery_up,0.02,0.02,derived_rule_contact_family,recovery up is not a standing punch defense
+upper_terminal,ground_hold,0.05,0.06,derived_rule_contact_family,ground hold is not a standing punch defense
+upper_terminal,combo_lateral_parry,0.72,0.62,derived_rule_contact_family,combo lateral parry is usable but should not dominate single upper-terminal attacks
+upper_terminal,combo_duck_slip,0.62,0.54,derived_rule_contact_family,combo duck slip is usable but secondary against single upper-terminal attacks
+upper_terminal,combo_block_retreat,0.60,0.58,derived_rule_contact_family,combo block retreat is conservative but secondary against single upper-terminal attacks
+lower_terminal,rigid_high_cross,0.18,0.12,derived_rule_contact_family,high cross is poorly aligned with lower terminal contact
+lower_terminal,rigid_high_parry,0.22,0.18,derived_rule_contact_family,high parry is poor against lower terminal contact
+lower_terminal,rigid_close_elbow,0.45,0.36,derived_rule_contact_family,close elbow offers limited leg-line defense
+lower_terminal,rigid_low_block,0.42,0.40,derived_rule_contact_family,low block partially supports lower terminal contact
+lower_terminal,rigid_close_clamp,0.92,0.88,derived_rule_contact_family,close clamp is strong against near-leg terminal contact
+lower_terminal,evade_lateral,0.88,0.72,derived_rule_contact_family,lateral exit is highly effective against leg terminal contact
+lower_terminal,evade_duck,0.20,0.16,derived_rule_contact_family,duck is weak against lower terminal contact
+lower_terminal,evade_back,0.84,0.68,derived_rule_contact_family,back step is effective against lower terminal contact
+lower_terminal,evade_spin,0.55,0.44,derived_rule_contact_family,spin evade is secondary against lower terminal contact
+lower_terminal,evade_orbit,0.72,0.60,derived_rule_contact_family,orbit is moderate against wider leg attacks
+lower_terminal,posture_high_cover,0.15,0.12,derived_rule_contact_family,high cover is ineffective against lower terminal contact
+lower_terminal,posture_torso_sink,0.62,0.56,derived_rule_contact_family,torso sink can help against close knee or kick pressure
+lower_terminal,posture_body_turn,0.48,0.42,derived_rule_contact_family,body turn gives partial relief against lower terminal contact
+lower_terminal,balance_micro_comp,0.30,0.28,derived_rule_contact_family,micro compensation is weak against leg-line contact
+lower_terminal,balance_soft_yield,0.86,0.84,derived_rule_contact_family,soft yield is strong against lower terminal contact
+lower_terminal,balance_step_reset,0.90,0.82,derived_rule_contact_family,step reset is strong against lower terminal contact
+lower_terminal,ground_transfer,0.08,0.08,derived_rule_contact_family,ground transfer is not a standing leg defense
+lower_terminal,recovery_up,0.02,0.02,derived_rule_contact_family,recovery up is not a standing leg defense
+lower_terminal,ground_hold,0.05,0.08,derived_rule_contact_family,ground hold is not a standing leg defense
+lower_terminal,combo_lateral_parry,0.35,0.30,derived_rule_contact_family,combo lateral parry should stay secondary against single leg terminals
+lower_terminal,combo_duck_slip,0.42,0.38,derived_rule_contact_family,combo duck slip is only partial against single leg terminals
+lower_terminal,combo_block_retreat,0.58,0.54,derived_rule_contact_family,combo block retreat is moderate against single leg terminals
+sweep_line,rigid_high_cross,0.05,0.04,derived_rule_contact_family,high cross does not fit sweep-line contact
+sweep_line,rigid_high_parry,0.05,0.04,derived_rule_contact_family,high parry does not fit sweep-line contact
+sweep_line,rigid_close_elbow,0.18,0.12,derived_rule_contact_family,elbow defense is weak against sweep-line contact
+sweep_line,rigid_low_block,0.94,0.90,derived_rule_contact_family,low block is the most compatible rigid answer to sweeps
+sweep_line,rigid_close_clamp,0.30,0.26,derived_rule_contact_family,close clamp gives limited help against sweeps
+sweep_line,evade_lateral,0.48,0.36,derived_rule_contact_family,lateral exit only partly helps against sweep-line attacks
+sweep_line,evade_duck,0.03,0.02,derived_rule_contact_family,duck is almost useless against sweeps
+sweep_line,evade_back,0.82,0.66,derived_rule_contact_family,back step can escape sweep-line contact if clearance is sufficient
+sweep_line,evade_spin,0.20,0.14,derived_rule_contact_family,spin evade is poor against sweeps
+sweep_line,evade_orbit,0.42,0.30,derived_rule_contact_family,orbit route only partly avoids a low sweep line
+sweep_line,posture_high_cover,0.05,0.04,derived_rule_contact_family,high cover does not help against sweeps
+sweep_line,posture_torso_sink,0.18,0.18,derived_rule_contact_family,torso sink does little against low sweeps
+sweep_line,posture_body_turn,0.24,0.20,derived_rule_contact_family,body turn provides only minor improvement against sweeps
+sweep_line,balance_micro_comp,0.32,0.30,derived_rule_contact_family,micro balance correction is limited against sweep-line contact
+sweep_line,balance_soft_yield,0.54,0.52,derived_rule_contact_family,soft yield is moderate against sweeps
+sweep_line,balance_step_reset,0.92,0.86,derived_rule_contact_family,step reset is highly compatible with sweep-line attacks
+sweep_line,ground_transfer,0.60,0.58,derived_rule_contact_family,ground transfer can mitigate sweep after destabilization
+sweep_line,recovery_up,0.10,0.10,derived_rule_contact_family,recovery up is not a direct sweep response
+sweep_line,ground_hold,0.50,0.58,derived_rule_contact_family,ground hold is moderate once already on the ground
+sweep_line,combo_lateral_parry,0.22,0.18,derived_rule_contact_family,lateral parry combo is weak against sweep-line attacks
+sweep_line,combo_duck_slip,0.10,0.08,derived_rule_contact_family,duck slip combo is weak against sweep-line attacks
+sweep_line,combo_block_retreat,0.40,0.34,derived_rule_contact_family,block retreat combo is only partially useful against sweeps
+torso_drive,rigid_high_cross,0.08,0.05,derived_rule_contact_family,high cross cannot safely receive torso drive
+torso_drive,rigid_high_parry,0.10,0.06,derived_rule_contact_family,high parry is poor against torso drive
+torso_drive,rigid_close_elbow,0.18,0.12,derived_rule_contact_family,close elbow is still weak against body charge
+torso_drive,rigid_low_block,0.12,0.10,derived_rule_contact_family,low block is poorly aligned with torso drive
+torso_drive,rigid_close_clamp,0.42,0.36,derived_rule_contact_family,close clamp can slow but not absorb a strong torso drive
+torso_drive,evade_lateral,0.90,0.74,derived_rule_contact_family,lateral exit is strong against torso drive
+torso_drive,evade_duck,0.22,0.16,derived_rule_contact_family,duck is weak against torso drive
+torso_drive,evade_back,0.58,0.48,derived_rule_contact_family,back step is only moderate against torso drive
+torso_drive,evade_spin,0.30,0.22,derived_rule_contact_family,spin evade is weak against torso drive
+torso_drive,evade_orbit,0.54,0.46,derived_rule_contact_family,orbit route is only moderate against torso drive
+torso_drive,posture_high_cover,0.15,0.12,derived_rule_contact_family,high cover is ineffective against torso drive
+torso_drive,posture_torso_sink,0.70,0.66,derived_rule_contact_family,torso sink can partially redirect body pressure
+torso_drive,posture_body_turn,0.52,0.48,derived_rule_contact_family,body turn is moderate against torso drive
+torso_drive,balance_micro_comp,0.38,0.42,derived_rule_contact_family,micro compensation helps only at small charge levels
+torso_drive,balance_soft_yield,0.98,0.96,derived_rule_contact_family,soft yield is the most compatible answer to torso drive
+torso_drive,balance_step_reset,0.90,0.84,derived_rule_contact_family,step reset is highly compatible with torso drive
+torso_drive,ground_transfer,0.45,0.50,derived_rule_contact_family,ground transfer is emergency mitigation for failed torso-drive defense
+torso_drive,recovery_up,0.08,0.08,derived_rule_contact_family,recovery up is not a primary torso-drive answer
+torso_drive,ground_hold,0.20,0.24,derived_rule_contact_family,ground hold is weak against standing torso drive
+torso_drive,combo_lateral_parry,0.36,0.30,derived_rule_contact_family,combo lateral parry is weak against full body charge
+torso_drive,combo_duck_slip,0.32,0.28,derived_rule_contact_family,combo duck slip is weak against full body charge
+torso_drive,combo_block_retreat,0.48,0.44,derived_rule_contact_family,combo block retreat is only moderate against full body charge
+sequence_chain,rigid_high_cross,0.38,0.30,derived_rule_contact_family,single high cross is too narrow for sequence chains
+sequence_chain,rigid_high_parry,0.42,0.34,derived_rule_contact_family,single high parry is too narrow for sequence chains
+sequence_chain,rigid_close_elbow,0.62,0.54,derived_rule_contact_family,close elbow is moderate against short sequence chains
+sequence_chain,rigid_low_block,0.26,0.24,derived_rule_contact_family,low block is too narrow for mixed sequence chains
+sequence_chain,rigid_close_clamp,0.50,0.46,derived_rule_contact_family,close clamp only partly handles sequence chains
+sequence_chain,evade_lateral,0.74,0.62,derived_rule_contact_family,lateral exit is moderate against sequence chains
+sequence_chain,evade_duck,0.46,0.38,derived_rule_contact_family,duck is situational against sequence chains
+sequence_chain,evade_back,0.70,0.60,derived_rule_contact_family,back step is moderate against sequence chains
+sequence_chain,evade_spin,0.38,0.30,derived_rule_contact_family,spin evade is weak against sequence chains
+sequence_chain,evade_orbit,0.62,0.54,derived_rule_contact_family,orbit route is moderate against sequence chains
+sequence_chain,posture_high_cover,0.28,0.24,derived_rule_contact_family,high cover is too static for sequence chains
+sequence_chain,posture_torso_sink,0.34,0.30,derived_rule_contact_family,torso sink is too static for sequence chains
+sequence_chain,posture_body_turn,0.42,0.38,derived_rule_contact_family,body turn is only partial against sequence chains
+sequence_chain,balance_micro_comp,0.24,0.24,derived_rule_contact_family,micro balance correction is weak against sequence chains
+sequence_chain,balance_soft_yield,0.40,0.44,derived_rule_contact_family,soft yield is only partial against sequence chains
+sequence_chain,balance_step_reset,0.46,0.48,derived_rule_contact_family,step reset is only partial against sequence chains
+sequence_chain,ground_transfer,0.05,0.05,derived_rule_contact_family,ground transfer is not a standing sequence-chain answer
+sequence_chain,recovery_up,0.02,0.02,derived_rule_contact_family,recovery up is not a standing sequence-chain answer
+sequence_chain,ground_hold,0.05,0.05,derived_rule_contact_family,ground hold is not a standing sequence-chain answer
+sequence_chain,combo_lateral_parry,0.96,0.88,derived_rule_contact_family,combo lateral parry is highly compatible with sequence chains
+sequence_chain,combo_duck_slip,0.92,0.82,derived_rule_contact_family,combo duck slip is highly compatible with sequence chains
+sequence_chain,combo_block_retreat,0.90,0.84,derived_rule_contact_family,combo block retreat is highly compatible with sequence chains
+ground_conditional,rigid_high_cross,0.38,0.34,derived_rule_contact_family,high cross has limited value against low-to-middle fallen counter contact
+ground_conditional,rigid_high_parry,0.42,0.36,derived_rule_contact_family,standing parry can redirect part of the fallen counter but is not ideal
+ground_conditional,rigid_close_elbow,0.58,0.50,derived_rule_contact_family,close elbow guard can protect torso during fallen counter contact
+ground_conditional,rigid_low_block,0.76,0.68,derived_rule_contact_family,downward low block is compatible with low-to-middle fallen counter contact
+ground_conditional,rigid_close_clamp,0.52,0.48,derived_rule_contact_family,clamp can restrict follow-up but has timing risk against fallen counter contact
+ground_conditional,evade_lateral,0.78,0.72,derived_rule_contact_family,lateral evade leaves the fallen counter line and is highly compatible
+ground_conditional,evade_duck,0.34,0.30,derived_rule_contact_family,ducking is weak because the attacker is already low
+ground_conditional,evade_back,0.84,0.78,derived_rule_contact_family,back step breaks range against fallen counter contact
+ground_conditional,evade_spin,0.58,0.52,derived_rule_contact_family,spin evade can work but costs posture time against fallen counter contact
+ground_conditional,evade_orbit,0.72,0.66,derived_rule_contact_family,orbit step moves to the side rear of fallen counter contact
+ground_conditional,posture_high_cover,0.30,0.28,derived_rule_contact_family,high cover is only a weak fallback against low-to-middle fallen counter contact
+ground_conditional,posture_torso_sink,0.62,0.56,derived_rule_contact_family,torso sink improves compactness against fallen counter contact
+ground_conditional,posture_body_turn,0.56,0.50,derived_rule_contact_family,body turn narrows the target against fallen counter contact
+ground_conditional,balance_micro_comp,0.48,0.44,derived_rule_contact_family,micro compensation is secondary after range control for fallen counter contact
+ground_conditional,balance_soft_yield,0.64,0.60,derived_rule_contact_family,soft yield absorbs the residual push of fallen counter contact
+ground_conditional,balance_step_reset,0.74,0.68,derived_rule_contact_family,step reset helps keep distance and stance against fallen counter contact
+ground_conditional,ground_transfer,0.82,0.74,derived_rule_contact_family,ground transfer is compatible with fallen counter situations
+ground_conditional,recovery_up,0.60,0.42,derived_rule_contact_family,recovery up can reduce residual exposure after fallen contact
+ground_conditional,ground_hold,0.96,0.92,derived_rule_contact_family,ground hold is the primary compatible defense for fallen contact
+ground_conditional,combo_lateral_parry,0.76,0.70,derived_rule_contact_family,lateral parry combo can redirect and step off fallen counter contact
+ground_conditional,combo_duck_slip,0.48,0.42,derived_rule_contact_family,duck slip combo is weaker because fallen counter contact starts low
+ground_conditional,combo_block_retreat,0.82,0.76,derived_rule_contact_family,block retreat combo combines contact control and range break against fallen counter contact

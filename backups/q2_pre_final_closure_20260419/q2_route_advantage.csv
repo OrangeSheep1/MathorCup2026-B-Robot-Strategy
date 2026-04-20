@@ -1,0 +1,44 @@
+trajectory_type,contact_mode_attack,direction_tag,range_tag,route_type,route_bonus,clearance_need_ratio,route_source,notes
+linear,fist_contact,front,middle,block_line,1.00,0.00,derived_rule_motion_geometry,rigid line block is ideal for straight punches
+linear,fist_contact,front,middle,evade_lateral,0.85,0.28,derived_rule_motion_geometry,lateral slip is effective against straight punches
+linear,fist_contact,front,middle,evade_back,0.72,0.38,derived_rule_motion_geometry,back step breaks the line after straight punches
+linear,leg_contact,front,long,evade_back,0.82,0.42,derived_rule_motion_geometry,back step can break the range of front kicks
+linear,leg_contact,front,long,evade_lateral,0.72,0.30,derived_rule_motion_geometry,lateral slip works but needs earlier motion against frontal kicks
+linear,leg_contact,front,long,block_line,0.55,0.00,derived_rule_motion_geometry,line block is possible but disadvantaged against long linear kicks
+linear,leg_contact,lateral,long,evade_lateral,0.92,0.32,derived_rule_motion_geometry,lateral slip is strong against side kicks
+linear,leg_contact,lateral,long,evade_orbit,0.80,0.36,derived_rule_motion_geometry,orbit step can leave the side-kick plane
+linear,leg_contact,lateral,long,evade_back,0.70,0.44,derived_rule_motion_geometry,back step is secondary against lateral long kicks
+arc,fist_contact,lateral,close,evade_lateral,1.00,0.25,derived_rule_motion_geometry,lateral slip is ideal against hook-like arcs
+arc,fist_contact,spin,middle,evade_orbit,1.00,0.32,derived_rule_motion_geometry,orbit movement handles wide swing trajectories
+arc,fist_contact,spin,middle,evade_back,0.72,0.45,derived_rule_motion_geometry,backward exit is secondary against wide swing punches
+arc,fist_contact,spin,middle,block_line,0.50,0.00,derived_rule_motion_geometry,rigid blocking is disadvantaged against wide arcs
+spin,leg_contact,spin,long,evade_orbit,1.00,0.35,derived_rule_motion_geometry,orbit step is ideal against spinning kicks
+spin,leg_contact,spin,long,evade_back,0.82,0.55,derived_rule_motion_geometry,back step opens range against spinning kicks but needs larger clearance
+spin,leg_contact,spin,long,evade_spin,0.72,0.40,derived_rule_motion_geometry,turning with the spin is feasible but slower
+spin,leg_contact,spin,long,block_line,0.30,0.00,derived_rule_motion_geometry,rigid block is poor against spinning long kicks
+sweep,sweep_contact,low,middle,balance_step,0.90,0.22,derived_rule_motion_geometry,step adjustment is effective against low sweep line
+sweep,sweep_contact,low,middle,evade_back,0.80,0.35,derived_rule_motion_geometry,back step can reduce sweep engagement if clearance is enough
+sweep,sweep_contact,low,middle,block_line,0.40,0.00,derived_rule_motion_geometry,direct block is poor against sweeping low attacks
+sweep,sweep_contact,low,middle,evade_duck,0.10,0.60,derived_rule_motion_geometry,ducking is ineffective against low sweeps
+rush,body_contact,front,close,yield_soft,1.00,0.00,derived_rule_motion_geometry,soft yielding best handles body charge
+rush,body_contact,front,close,evade_lateral,0.90,0.28,derived_rule_motion_geometry,lateral exit is good against frontal rush
+rush,body_contact,front,close,balance_step,0.88,0.24,derived_rule_motion_geometry,step adjustment can redirect charge
+rush,body_contact,front,close,evade_back,0.30,0.65,derived_rule_motion_geometry,back step is weak against short-distance charge because the clearance need is large
+rush,body_contact,front,close,block_line,0.25,0.00,derived_rule_motion_geometry,rigid line block is weak against full body charge
+sequence,multi_contact,front_lateral,middle,combo_lateral_parry,0.95,0.18,derived_rule_motion_geometry,lateral parry chain handles mixed sequence pressure
+sequence,multi_contact,front_lateral,middle,combo_duck_slip,0.88,0.20,derived_rule_motion_geometry,duck slip handles front-lateral chain pressure
+sequence,multi_contact,front_lateral,middle,combo_block_retreat,0.86,0.24,derived_rule_motion_geometry,block retreat is a conservative mixed-sequence answer
+sequence,multi_contact,front,middle,combo_block_retreat,0.90,0.20,derived_rule_motion_geometry,block retreat handles straight chained pressure
+sequence,multi_contact,front,middle,combo_lateral_parry,0.84,0.16,derived_rule_motion_geometry,lateral parry is still useful for front-line sequences
+recovery,conditional_contact,mixed,close,ground_hold,0.90,0.00,derived_rule_motion_geometry,ground guard best matches fallen counter situations
+recovery,conditional_contact,mixed,close,ground_transfer,0.82,0.00,derived_rule_motion_geometry,controlled transfer can blunt ground response
+any,any,any,any,evade_lateral,0.60,0.30,derived_rule_motion_geometry,default lateral evade baseline
+any,any,any,any,evade_back,0.52,0.42,derived_rule_motion_geometry,default back evade baseline
+any,any,any,any,evade_orbit,0.58,0.34,derived_rule_motion_geometry,default orbit evade baseline
+any,any,any,any,evade_spin,0.52,0.38,derived_rule_motion_geometry,default spin evade baseline
+any,any,any,any,evade_duck,0.48,0.26,derived_rule_motion_geometry,default duck evade baseline
+any,any,any,any,balance_step,0.58,0.24,derived_rule_motion_geometry,default balance-step baseline
+any,any,any,any,yield_soft,0.62,0.00,derived_rule_motion_geometry,default soft-yield baseline
+any,any,any,any,combo_lateral_parry,0.68,0.18,derived_rule_motion_geometry,default combo lateral parry baseline
+any,any,any,any,combo_duck_slip,0.65,0.20,derived_rule_motion_geometry,default combo duck slip baseline
+any,any,any,any,combo_block_retreat,0.64,0.24,derived_rule_motion_geometry,default combo block retreat baseline
