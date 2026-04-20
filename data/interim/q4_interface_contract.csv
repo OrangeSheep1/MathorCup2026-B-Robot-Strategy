@@ -1,0 +1,6 @@
+﻿source,file,required_fields,usage
+Q1,action_features.csv,action_id/action_name/score_prob/energy_cost/utility,动作核与战术压缩
+Q2,defense_pair_scores.csv,action_id/defense_id/p_block/counter_prob/p_fall,接口校验和攻防语义追溯
+Q3,q3_action_kernels.csv,macro_group/p_score_for/p_score_against/p_self_drop/p_opp_drop/p_fall,Q4 常规战术转移核
+Q3,q3_method_metrics.csv,scenario/method/win_rate,三场景无资源基础胜率校准
+Q4,q4_fault_params.json,lambda_0/k_fault/resource/time parameters,故障与资源动作参数

@@ -1,0 +1,9 @@
+﻿item,path,exists,modified_time,size_bytes,row_count,value
+q1_action,E:\Python Project\6.Practical_project\yt\14\16th_MathorCup\MathorCup2026-B-Robot-Strategy\data\interim\action_features.csv,True,2026-04-19T17:51:20.438251,12932.0,13.0,
+q2_pair,E:\Python Project\6.Practical_project\yt\14\16th_MathorCup\MathorCup2026-B-Robot-Strategy\data\interim\defense_pair_scores.csv,True,2026-04-20T12:52:59.092293,601347.0,286.0,
+q3_kernel,E:\Python Project\6.Practical_project\yt\14\16th_MathorCup\MathorCup2026-B-Robot-Strategy\data\interim\q3_action_kernels.csv,True,2026-04-20T20:33:19.759943,187280.0,618.0,
+q3_metric,E:\Python Project\6.Practical_project\yt\14\16th_MathorCup\MathorCup2026-B-Robot-Strategy\data\interim\q3_method_metrics.csv,True,2026-04-20T20:33:20.999636,1758.0,12.0,
+q4_fault_param,E:\Python Project\6.Practical_project\yt\14\16th_MathorCup\MathorCup2026-B-Robot-Strategy\data\raw\q4_fault_params.json,True,2026-04-20T21:41:13.442568,641.0,,
+q3_base_win_leading,E:\Python Project\6.Practical_project\yt\14\16th_MathorCup\MathorCup2026-B-Robot-Strategy\data\interim\q3_method_metrics.csv,True,,,,1.0
+q3_base_win_tied,E:\Python Project\6.Practical_project\yt\14\16th_MathorCup\MathorCup2026-B-Robot-Strategy\data\interim\q3_method_metrics.csv,True,,,,0.544
+q3_base_win_trailing,E:\Python Project\6.Practical_project\yt\14\16th_MathorCup\MathorCup2026-B-Robot-Strategy\data\interim\q3_method_metrics.csv,True,,,,0.04

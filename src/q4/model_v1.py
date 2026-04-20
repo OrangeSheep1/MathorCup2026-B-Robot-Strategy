@@ -110,6 +110,14 @@ class Q4Config:
     max_pause: int
     max_repair: int
     fall_down_weight: float
+    fault_time_weight: float
+    fault_action_weight: float
+    p_pause_score_loss: float
+    p_reset_score_loss: float
+    resource_uplift_scale: float
+    max_uplift_leading: float
+    max_uplift_tied: float
+    max_uplift_trailing: float
     health_full_threshold: float
     health_partial_threshold: float
     resource_time_mode: str
@@ -223,11 +231,19 @@ def apply_health_drop(level: int, drop_flag: int) -> int:
     return max(0, int(level) - int(drop_flag))
 
 
-def compute_fault_rate(health_my: int, config: Q4Config) -> float:
+def compute_fault_rate(
+    health_my: int,
+    config: Q4Config,
+    time_bucket: int = 0,
+    action_load: float = 0.0,
+) -> float:
     """根据当前机能档计算故障率。"""
 
     ratio = health_ratio(health_my)
-    fault_rate = config.lambda_0 * math.exp(config.k_fault * (1.0 - ratio))
+    time_progress = float(np.clip(time_bucket / max(config.n_time_buckets, 1), 0.0, 1.0))
+    time_factor = 1.0 + config.fault_time_weight * time_progress
+    action_factor = 1.0 + config.fault_action_weight * float(np.clip(action_load, -0.5, 1.5))
+    fault_rate = config.lambda_0 * math.exp(config.k_fault * (1.0 - ratio)) * time_factor * action_factor
     return float(np.clip(fault_rate, 0.0, 0.95))
 
 
@@ -263,6 +279,14 @@ def _default_fault_params() -> dict[str, float]:
         "tau_reset_buckets": 1,
         "base_win_scale": 1.0,
         "fall_down_weight": 0.35,
+        "fault_time_weight": 0.40,
+        "fault_action_weight": 0.30,
+        "p_pause_score_loss": 0.03,
+        "p_reset_score_loss": 0.08,
+        "resource_uplift_scale": 1.00,
+        "max_uplift_leading": 0.025,
+        "max_uplift_tied": 0.16,
+        "max_uplift_trailing": 0.18,
         "resource_time_mode": "opportunity_bucket",
         "max_reset": 2,
         "max_pause": 2,
@@ -315,6 +339,14 @@ def build_q4_config(params: dict[str, float]) -> Q4Config:
         max_pause=int(params["max_pause"]),
         max_repair=int(params["max_repair"]),
         fall_down_weight=float(params.get("fall_down_weight", params.get("fall_fault_weight", 0.35))),
+        fault_time_weight=float(params.get("fault_time_weight", 0.40)),
+        fault_action_weight=float(params.get("fault_action_weight", 0.30)),
+        p_pause_score_loss=float(params.get("p_pause_score_loss", 0.03)),
+        p_reset_score_loss=float(params.get("p_reset_score_loss", 0.08)),
+        resource_uplift_scale=float(params.get("resource_uplift_scale", 1.00)),
+        max_uplift_leading=float(params.get("max_uplift_leading", 0.025)),
+        max_uplift_tied=float(params.get("max_uplift_tied", 0.16)),
+        max_uplift_trailing=float(params.get("max_uplift_trailing", 0.18)),
         health_full_threshold=0.67,
         health_partial_threshold=0.33,
         resource_time_mode=str(params.get("resource_time_mode", "opportunity_bucket")),
@@ -404,47 +436,80 @@ def _select_tactical_actions(q3_kernel_table: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([tactical_table, resource_table], ignore_index=True)
 
 
+def _softmax_weights(values: pd.Series, temperature: float = 0.08) -> np.ndarray:
+    """将 Q3 动作核分值转为稳定的 Top-k 权重。"""
+
+    scores = values.to_numpy(dtype=float)
+    centered = scores - float(np.max(scores))
+    weights = np.exp(centered / max(temperature, 1e-6))
+    weights_sum = float(weights.sum())
+    if weights_sum <= 0:
+        return np.ones(len(scores), dtype=float) / max(len(scores), 1)
+    return weights / weights_sum
+
+
+def _weighted_mean(frame: pd.DataFrame, column: str, weights: np.ndarray) -> float:
+    """计算加权均值并裁剪为概率口径。"""
+
+    return float(np.average(frame[column].to_numpy(dtype=float), weights=weights))
+
+
 def _build_micro_kernel_lookup(
     q3_kernel_table: pd.DataFrame,
     tactical_actions: pd.DataFrame,
     base_win_scale: float,
 ) -> dict[tuple[str, int, int], MicroKernel]:
-    """基于 Q3 常规动作核构建 Q4 可直接调用的战术动作核。"""
+    """基于 Q3 常规动作核构建 Q4 可直接调用的 Top-k 宏观动作核。"""
 
     regular_actions = tactical_actions[tactical_actions["action_type"] != "resource"].copy()
     lookup: dict[tuple[str, int, int], MicroKernel] = {}
 
     for _, tactical_row in regular_actions.iterrows():
-        source_action_id = str(tactical_row["source_action_id"])
         tactical_id = str(tactical_row["tactical_id"])
-        source_rows = q3_kernel_table[
-            (q3_kernel_table["counter_ready"] == 0)
-            & (q3_kernel_table["action_id"] == source_action_id)
-        ].copy()
-        for _, kernel_row in source_rows.iterrows():
-            p_for = float(kernel_row["p_score_for"])
-            p_against = float(kernel_row["p_score_against"])
-            neutral = max(0.0, 1.0 - p_for - p_against)
-            scaled_for = float(np.clip(p_for * base_win_scale, 0.0, 1.0))
-            remain = max(0.0, 1.0 - scaled_for)
-            if p_against + neutral > 0:
-                scaled_against = min(remain, p_against / (p_against + neutral) * remain)
-            else:
-                scaled_against = min(remain, p_against)
-            lookup[(tactical_id, int(kernel_row["health_my"]), int(kernel_row["health_opp"]))] = MicroKernel(
-                tactical_id=tactical_id,
-                tactical_name=str(tactical_row["tactical_name"]),
-                action_type=str(tactical_row["action_type"]),
-                macro_group=str(tactical_row["macro_group"]),
-                source_action_id=source_action_id,
-                source_action_name=str(tactical_row["source_action_name"]),
-                expected_reward=float(kernel_row["expected_reward"]),
-                p_score_for=scaled_for,
-                p_score_against=float(np.clip(scaled_against, 0.0, 1.0)),
-                p_self_drop=float(np.clip(kernel_row["p_self_drop"], 0.0, 1.0)),
-                p_opp_drop=float(np.clip(kernel_row["p_opp_drop"], 0.0, 1.0)),
-                p_fall=float(np.clip(kernel_row["p_fall"], 0.0, 1.0)),
-            )
+        macro_group = str(tactical_row["macro_group"])
+        action_type = str(tactical_row["action_type"])
+        for health_my in HEALTH_LEVELS:
+            for health_opp in HEALTH_LEVELS:
+                source_rows = q3_kernel_table[
+                    (q3_kernel_table["counter_ready"] == 0)
+                    & (q3_kernel_table["macro_group"] == macro_group)
+                    & (q3_kernel_table["action_type"] == action_type)
+                    & (q3_kernel_table["health_my"] == health_my)
+                    & (q3_kernel_table["health_opp"] == health_opp)
+                ].copy()
+                if source_rows.empty:
+                    continue
+                source_rows = source_rows.sort_values(["expected_reward", "action_id"], ascending=[False, True]).head(3)
+                weights = _softmax_weights(source_rows["expected_reward"])
+                p_for = _weighted_mean(source_rows, "p_score_for", weights)
+                p_against = _weighted_mean(source_rows, "p_score_against", weights)
+                source_action_id = str(source_rows.iloc[0]["action_id"])
+                source_action_name = str(source_rows.iloc[0]["action_name"])
+                expected_reward = _weighted_mean(source_rows, "expected_reward", weights)
+                p_self_drop = _weighted_mean(source_rows, "p_self_drop", weights)
+                p_opp_drop = _weighted_mean(source_rows, "p_opp_drop", weights)
+                p_fall = _weighted_mean(source_rows, "p_fall", weights)
+                neutral = max(0.0, 1.0 - p_for - p_against)
+                scaled_for = float(np.clip(p_for * base_win_scale, 0.0, 1.0))
+                remain = max(0.0, 1.0 - scaled_for)
+                if p_against + neutral > 0:
+                    scaled_against = min(remain, p_against / (p_against + neutral) * remain)
+                else:
+                    scaled_against = min(remain, p_against)
+                lookup[(tactical_id, int(health_my), int(health_opp))] = MicroKernel(
+                    tactical_id=tactical_id,
+                    tactical_name=str(tactical_row["tactical_name"]),
+                    action_type=action_type,
+                    macro_group=macro_group,
+                    source_action_id=source_action_id,
+                    source_action_name=source_action_name,
+                    expected_reward=expected_reward,
+                    p_score_for=scaled_for,
+                    p_score_against=float(np.clip(scaled_against, 0.0, 1.0)),
+                    p_self_drop=float(np.clip(p_self_drop, 0.0, 1.0)),
+                    p_opp_drop=float(np.clip(p_opp_drop, 0.0, 1.0)),
+                    p_fall=float(np.clip(p_fall, 0.0, 1.0)),
+                )
     return lookup
 
 
@@ -577,6 +642,19 @@ def _self_recover_prob(health_my: int) -> float:
     return float(np.clip(base_prob, 0.0, 0.90))
 
 
+def _action_load_factor(macro_group: str) -> float:
+    """将宏观动作映射为短期故障负荷。"""
+
+    mapping = {
+        "试探攻击": 0.20,
+        "激进攻击": 1.00,
+        "反击防守": 0.55,
+        "保守防守": 0.15,
+        "平衡恢复": -0.20,
+    }
+    return float(mapping.get(macro_group, 0.0))
+
+
 def _build_regular_transitions(state: RoundState, kernel: MicroKernel, context: Q4Context) -> list[tuple[float, RoundState]]:
     """构造常规战术动作的一步转移。"""
 
@@ -615,7 +693,12 @@ def _build_regular_transitions(state: RoundState, kernel: MicroKernel, context: 
             next_health_my = apply_health_drop(state.health_my, self_drop)
             next_health_opp = apply_health_drop(state.health_opp, opp_drop)
             next_time = min(context.config.n_time_buckets, state.time_bucket + 1)
-            fault_rate = compute_fault_rate(next_health_my, context.config)
+            fault_rate = compute_fault_rate(
+                next_health_my,
+                context.config,
+                time_bucket=next_time,
+                action_load=_action_load_factor(kernel.macro_group),
+            )
             down_rate = float(np.clip(context.config.fall_down_weight * kernel.p_fall, 0.0, 0.95))
             fault_rate = float(np.clip(fault_rate, 0.0, 1.0))
             stable_rate = max(0.0, (1.0 - down_rate) * (1.0 - fault_rate))
@@ -665,35 +748,55 @@ def _build_regular_transitions(state: RoundState, kernel: MicroKernel, context: 
 def _build_pause_transitions(state: RoundState, context: Q4Context) -> list[tuple[float, RoundState]]:
     """战术暂停的确定性转移。"""
 
-    next_state = RoundState(
-        score_diff=state.score_diff,
-        time_bucket=_resource_time_cost(state, context.config.tau_pause_buckets, context),
-        health_my=apply_health_gain(state.health_my, context.config.delta_h_pause, context.config),
-        health_opp=state.health_opp,
-        fault=0,
-        down_flag=0,
-        reset_left=state.reset_left,
-        pause_left=max(0, state.pause_left - 1),
-        repair_left=state.repair_left,
-    )
-    return [(1.0, next_state)]
+    next_time = _resource_time_cost(state, context.config.tau_pause_buckets, context)
+    next_health = apply_health_gain(state.health_my, context.config.delta_h_pause, context.config)
+    loss_prob = float(np.clip(context.config.p_pause_score_loss, 0.0, 0.50))
+    transitions = []
+    for score_loss, probability in [(0, 1.0 - loss_prob), (1, loss_prob)]:
+        transitions.append(
+            (
+                probability,
+                RoundState(
+                    score_diff=_clip_score_diff(state.score_diff - score_loss),
+                    time_bucket=next_time,
+                    health_my=next_health,
+                    health_opp=state.health_opp,
+                    fault=0,
+                    down_flag=0,
+                    reset_left=state.reset_left,
+                    pause_left=max(0, state.pause_left - 1),
+                    repair_left=state.repair_left,
+                ),
+            )
+        )
+    return _merge_transitions(transitions)
 
 
 def _build_reset_transitions(state: RoundState, context: Q4Context) -> list[tuple[float, RoundState]]:
     """人工复位的确定性转移。"""
 
-    next_state = RoundState(
-        score_diff=state.score_diff,
-        time_bucket=_resource_time_cost(state, context.config.tau_reset_buckets, context),
-        health_my=apply_health_gain(state.health_my, context.config.delta_h_reset, context.config),
-        health_opp=state.health_opp,
-        fault=state.fault,
-        down_flag=0,
-        reset_left=max(0, state.reset_left - 1),
-        pause_left=state.pause_left,
-        repair_left=state.repair_left,
-    )
-    return [(1.0, next_state)]
+    next_time = _resource_time_cost(state, context.config.tau_reset_buckets, context)
+    next_health = apply_health_gain(state.health_my, context.config.delta_h_reset, context.config)
+    loss_prob = float(np.clip(context.config.p_reset_score_loss, 0.0, 0.70))
+    transitions = []
+    for score_loss, probability in [(0, 1.0 - loss_prob), (1, loss_prob)]:
+        transitions.append(
+            (
+                probability,
+                RoundState(
+                    score_diff=_clip_score_diff(state.score_diff - score_loss),
+                    time_bucket=next_time,
+                    health_my=next_health,
+                    health_opp=state.health_opp,
+                    fault=state.fault,
+                    down_flag=0,
+                    reset_left=max(0, state.reset_left - 1),
+                    pause_left=state.pause_left,
+                    repair_left=state.repair_left,
+                ),
+            )
+        )
+    return _merge_transitions(transitions)
 
 
 def _binomial_probabilities(n_trials: int, success_prob: float) -> list[tuple[int, float]]:

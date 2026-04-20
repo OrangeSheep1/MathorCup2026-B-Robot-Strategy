@@ -1,0 +1,10 @@
+﻿scenario_key,scenario,resource_type,use_count,p25_min,median_min,p75_min
+leading,领先局,reset,0,,,
+leading,领先局,pause,0,,,
+leading,领先局,repair,0,,,
+tied,平局局,reset,1061,0.6666666666666666,1.6666666666666665,2.6666666666666665
+tied,平局局,pause,3538,0.3333333333333333,1.0,1.6666666666666665
+tied,平局局,repair,1341,1.6666666666666665,3.0,4.0
+trailing,落后局,reset,491,1.0,2.333333333333333,3.333333333333333
+trailing,落后局,pause,522,0.3333333333333333,1.0,1.3333333333333333
+trailing,落后局,repair,531,1.6666666666666665,3.0,4.0

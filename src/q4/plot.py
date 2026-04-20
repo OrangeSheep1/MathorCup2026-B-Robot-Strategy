@@ -23,6 +23,23 @@ METHOD_COLORS = {
     "exhaustive_static": "#4A5568",
     "all_in_first": "#2F855A",
 }
+SCENARIO_COLORS = {
+    "leading": "#2B6CB0",
+    "tied": "#2F855A",
+    "trailing": "#C53030",
+}
+ACTION_COLORS = {
+    "试探攻击": "#63B3ED",
+    "激进攻击": "#C53030",
+    "反击防守": "#805AD5",
+    "保守防守": "#2B6CB0",
+    "平衡恢复": "#2F855A",
+    "人工复位": "#D69E2E",
+    "战术暂停": "#38A169",
+    "紧急维修": "#DD6B20",
+    "倒地等待": "#718096",
+    "故障等待": "#4A5568",
+}
 
 
 def _set_axis_style(ax: plt.Axes, grid: bool = True) -> None:
@@ -78,14 +95,26 @@ def plot_policy_tree(macro_policy_table: pd.DataFrame, output_path: str | Path) 
             color="#1A202C",
             zorder=4,
         )
+        expected_usage = f"用R{float(row['expected_used_reset']):.1f}/P{float(row['expected_used_pause']):.1f}/M{float(row['expected_used_repair']):.1f}"
         ax.text(
             x0,
-            y0 - 0.10,
+            y0 - 0.02,
             str(row["allocation_label"]),
             ha="center",
             va="center",
             fontsize=TEXT_SIZE - 1,
             color="#1A202C",
+            zorder=4,
+        )
+        ax.text(
+            x0,
+            y0 - 0.22,
+            expected_usage,
+            ha="center",
+            va="center",
+            fontsize=TEXT_SIZE - 2,
+            fontproperties=zh_font,
+            color="#2D3748",
             zorder=4,
         )
         win_state = tuple(int(value) for value in row["next_win_state"].strip("()").split(","))
@@ -101,7 +130,7 @@ def plot_policy_tree(macro_policy_table: pd.DataFrame, output_path: str | Path) 
             ax.text(
                 (x0 + x1) / 2.0,
                 (y0 + y1) / 2.0 + (0.12 if linestyle == "-" else -0.12),
-                label,
+                f"{label}\nP={float(row['round_pwin']):.2f}" if linestyle == "-" else label,
                 fontsize=TEXT_SIZE - 1,
                 fontproperties=zh_font,
                 bbox=dict(facecolor="white", edgecolor="none", alpha=0.85),
@@ -122,7 +151,7 @@ def plot_policy_tree(macro_policy_table: pd.DataFrame, output_path: str | Path) 
             color="#1A202C",
         )
 
-    ax.set_title("Q4 BO3 资源分配策略树", fontproperties=zh_font, fontsize=TITLE_SIZE, pad=10)
+    ax.set_title("Q4 BO3 动态资源策略树", fontproperties=zh_font, fontsize=TITLE_SIZE, pad=10)
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_xlim(-0.4, 4.1)
@@ -248,6 +277,218 @@ def plot_scenario_radar(resource_usage: pd.DataFrame, output_path: str | Path) -
     return output
 
 
+def plot_resource_gain(resource_uplift: pd.DataFrame, output_path: str | Path) -> Path:
+    """绘制三场景零资源与最优资源胜率增益主图。"""
+
+    zh_font, _ = configure_fonts()
+    order = ["leading", "tied", "trailing"]
+    labels = ["领先局", "平局局", "落后局"]
+    best_rows = (
+        resource_uplift.sort_values(["scenario_key", "p_win"], ascending=[True, False])
+        .groupby("scenario_key", as_index=False)
+        .head(1)
+        .set_index("scenario_key")
+    )
+    zero_rows = (
+        resource_uplift[resource_uplift["allocation_label"] == "R0-P0-M0"]
+        .set_index("scenario_key")
+    )
+    zero_values = [float(zero_rows.loc[key, "p_win"]) for key in order]
+    best_values = [float(best_rows.loc[key, "p_win"]) for key in order]
+    best_labels = [str(best_rows.loc[key, "allocation_label"]) for key in order]
+
+    x = np.arange(len(order))
+    width = 0.34
+    figure, ax = plt.subplots(figsize=(8.6, 5.2))
+    ax.bar(x - width / 2, zero_values, width, label="零资源", color="#A0AEC0", edgecolor="#1A202C", linewidth=0.7)
+    ax.bar(x + width / 2, best_values, width, label="最优资源", color="#2B6CB0", edgecolor="#1A202C", linewidth=0.7)
+    for index, (value, label) in enumerate(zip(best_values, best_labels, strict=True)):
+        ax.text(index + width / 2, value + 0.015, label, ha="center", va="bottom", fontsize=TEXT_SIZE, fontproperties=zh_font)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontproperties=zh_font, fontsize=TICK_SIZE)
+    ax.set_ylabel("单局获胜概率", fontproperties=zh_font, fontsize=LABEL_SIZE)
+    ax.set_title("Q4 三场景资源增益主图", fontproperties=zh_font, fontsize=TITLE_SIZE, pad=10)
+    ax.set_ylim(0.0, min(1.05, max(best_values + zero_values) + 0.12))
+    ax.legend(frameon=False, prop=zh_font)
+    _set_axis_style(ax, grid=True)
+
+    output = Path(output_path)
+    figure.tight_layout()
+    figure.savefig(output, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
+    plt.close(figure)
+    return output
+
+
+def plot_resource_timing(
+    resource_usage: pd.DataFrame,
+    first_use_distribution: pd.DataFrame,
+    output_path: str | Path,
+) -> Path:
+    """绘制资源使用率与首次使用中位时机。"""
+
+    zh_font, _ = configure_fonts()
+    order = ["leading", "tied", "trailing"]
+    labels = ["领先局", "平局局", "落后局"]
+    usage = resource_usage.set_index("scenario_key")
+    x = np.arange(len(order))
+    width = 0.22
+    figure, ax_left = plt.subplots(figsize=(9.2, 5.3))
+    ax_right = ax_left.twinx()
+
+    bars = [
+        ("reset_use_rate", "复位率", "#63B3ED", -width),
+        ("pause_use_rate", "暂停率", "#2F855A", 0.0),
+        ("repair_use_rate", "维修率", "#DD6B20", width),
+    ]
+    for column, label, color, offset in bars:
+        ax_left.bar(
+            x + offset,
+            [float(usage.loc[key, column]) for key in order],
+            width,
+            label=label,
+            color=color,
+            edgecolor="#1A202C",
+            linewidth=0.6,
+            alpha=0.84,
+        )
+
+    median_rows = first_use_distribution.pivot_table(
+        index="scenario_key",
+        columns="resource_type",
+        values="median_min",
+        aggfunc="first",
+    )
+    for resource_type, label, color, marker in [
+        ("reset", "复位中位时机", "#2B6CB0", "o"),
+        ("pause", "暂停中位时机", "#276749", "s"),
+        ("repair", "维修中位时机", "#C05621", "^"),
+    ]:
+        if resource_type not in median_rows.columns:
+            continue
+        values = [float(median_rows.loc[key, resource_type]) if key in median_rows.index and pd.notna(median_rows.loc[key, resource_type]) else np.nan for key in order]
+        ax_right.plot(x, values, color=color, marker=marker, linewidth=1.8, label=label)
+
+    ax_left.set_xticks(x)
+    ax_left.set_xticklabels(labels, fontproperties=zh_font, fontsize=TICK_SIZE)
+    ax_left.set_ylabel("资源使用率", fontproperties=zh_font, fontsize=LABEL_SIZE)
+    ax_right.set_ylabel("首次使用中位时刻 / 分钟", fontproperties=zh_font, fontsize=LABEL_SIZE)
+    ax_left.set_ylim(0.0, 1.05)
+    ax_left.set_title("Q4 三场景资源使用率与时机", fontproperties=zh_font, fontsize=TITLE_SIZE, pad=10)
+    _set_axis_style(ax_left, grid=True)
+    ax_right.spines["top"].set_visible(False)
+    handles_left, labels_left = ax_left.get_legend_handles_labels()
+    handles_right, labels_right = ax_right.get_legend_handles_labels()
+    ax_left.legend(handles_left + handles_right, labels_left + labels_right, loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3, frameon=False, prop=zh_font)
+
+    output = Path(output_path)
+    figure.tight_layout(rect=(0.0, 0.08, 1.0, 1.0))
+    figure.savefig(output, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
+    plt.close(figure)
+    return output
+
+
+def plot_resource_policy_heatmap(policy_heatmap_table: pd.DataFrame, output_path: str | Path) -> Path:
+    """绘制状态条件下的资源/战术推荐热图。"""
+
+    zh_font, _ = configure_fonts()
+    if policy_heatmap_table.empty:
+        figure, ax = plt.subplots(figsize=(8.0, 4.0))
+        ax.text(0.5, 0.5, "无资源策略热图数据", ha="center", va="center", fontproperties=zh_font)
+        ax.axis("off")
+        output = Path(output_path)
+        figure.savefig(output, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
+        plt.close(figure)
+        return output
+
+    score_order = ["大幅领先", "小幅领先", "平局", "小幅落后", "大幅落后"]
+    time_order = ["前期", "中期", "后期"]
+    status_order = ["正常", "低机能", "故障", "倒地"]
+    row_labels = [f"{score}\n{phase}" for score in score_order for phase in time_order]
+    row_keys = [(score, phase) for score in score_order for phase in time_order]
+    action_names = sorted(policy_heatmap_table["recommended_action_name"].dropna().unique().tolist())
+    action_to_code = {name: index + 1 for index, name in enumerate(action_names)}
+    code_to_color = {0: "#F7FAFC"}
+    for name, code in action_to_code.items():
+        code_to_color[code] = ACTION_COLORS.get(name, "#A0AEC0")
+
+    matrix = np.zeros((len(row_keys), len(status_order)), dtype=float)
+    annotation = [["" for _ in status_order] for _ in row_keys]
+    share_text = [["" for _ in status_order] for _ in row_keys]
+    lookup = {
+        (str(row["score_diff_band"]), str(row["time_bucket_band"]), str(row["status_label"])): row
+        for _, row in policy_heatmap_table.iterrows()
+    }
+    for row_index, (score, phase) in enumerate(row_keys):
+        for col_index, status in enumerate(status_order):
+            row = lookup.get((score, phase, status))
+            if row is None:
+                continue
+            action_name = str(row["recommended_action_name"])
+            matrix[row_index, col_index] = action_to_code.get(action_name, 0)
+            annotation[row_index][col_index] = action_name.replace("紧急", "")
+            share_text[row_index][col_index] = f"{float(row['state_share']):.0%}"
+
+    from matplotlib.colors import ListedColormap, BoundaryNorm
+
+    colors = [code_to_color[index] for index in range(len(action_names) + 1)]
+    cmap = ListedColormap(colors)
+    norm = BoundaryNorm(np.arange(-0.5, len(action_names) + 1.5, 1.0), cmap.N)
+
+    figure, ax = plt.subplots(figsize=(9.2, 8.4))
+    ax.imshow(matrix, cmap=cmap, norm=norm, aspect="auto")
+    ax.set_xticks(np.arange(len(status_order)))
+    ax.set_xticklabels(status_order, fontproperties=zh_font, fontsize=TICK_SIZE)
+    ax.set_yticks(np.arange(len(row_labels)))
+    ax.set_yticklabels(row_labels, fontproperties=zh_font, fontsize=TICK_SIZE - 1)
+    ax.set_title("Q4 状态条件下的资源与战术推荐", fontproperties=zh_font, fontsize=TITLE_SIZE, pad=10)
+    ax.tick_params(length=0)
+    for row_index in range(matrix.shape[0]):
+        for col_index in range(matrix.shape[1]):
+            if annotation[row_index][col_index]:
+                ax.text(
+                    col_index,
+                    row_index - 0.12,
+                    annotation[row_index][col_index],
+                    ha="center",
+                    va="center",
+                    fontproperties=zh_font,
+                    fontsize=TEXT_SIZE - 2,
+                    color="#1A202C",
+                )
+                ax.text(
+                    col_index,
+                    row_index + 0.20,
+                    share_text[row_index][col_index],
+                    ha="center",
+                    va="center",
+                    fontsize=TEXT_SIZE - 3,
+                    color="#2D3748",
+                )
+    ax.set_xticks(np.arange(-0.5, len(status_order), 1), minor=True)
+    ax.set_yticks(np.arange(-0.5, len(row_labels), 1), minor=True)
+    ax.grid(which="minor", color="white", linestyle="-", linewidth=1.2)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+    legend_handles = [
+        Line2D([0], [0], marker="s", color="none", markerfacecolor=ACTION_COLORS.get(name, "#A0AEC0"), markeredgecolor="#1A202C", label=name)
+        for name in action_names
+    ]
+    ax.legend(
+        handles=legend_handles,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.06),
+        ncol=4,
+        frameon=False,
+        prop=zh_font,
+    )
+    output = Path(output_path)
+    figure.tight_layout(rect=(0.0, 0.08, 1.0, 1.0))
+    figure.savefig(output, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
+    plt.close(figure)
+    return output
+
+
 def plot_method_boxplot(
     batch_distribution: pd.DataFrame,
     method_summary: pd.DataFrame,
@@ -293,6 +534,212 @@ def plot_method_boxplot(
 
     output = Path(output_path)
     figure.tight_layout()
+    figure.savefig(output, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
+    plt.close(figure)
+    return output
+
+
+def plot_composite_score(composite_score: pd.DataFrame, output_path: str | Path) -> Path:
+    """绘制 Q4 综合资源调度指数。"""
+
+    zh_font, _ = configure_fonts()
+    ordered = composite_score.sort_values("composite_score", ascending=True).reset_index(drop=True)
+    figure, ax = plt.subplots(figsize=(8.8, 5.0))
+    colors = [METHOD_COLORS.get(method, "#4A5568") for method in ordered["method"]]
+    y_positions = np.arange(len(ordered))
+    bars = ax.barh(
+        y_positions,
+        ordered["composite_score"],
+        color=colors,
+        edgecolor="#1A202C",
+        linewidth=0.7,
+        alpha=0.88,
+    )
+    for bar, value in zip(bars, ordered["composite_score"], strict=True):
+        ax.text(
+            value + 0.015,
+            bar.get_y() + bar.get_height() / 2,
+            f"{value:.3f}",
+            va="center",
+            fontsize=TEXT_SIZE,
+        )
+    ax.set_xlim(0.0, min(1.05, float(ordered["composite_score"].max()) + 0.10))
+    ax.set_yticks(y_positions)
+    ax.set_yticklabels(ordered["method_label"], fontproperties=zh_font, fontsize=TICK_SIZE)
+    ax.set_xlabel("综合资源调度指数", fontproperties=zh_font, fontsize=LABEL_SIZE)
+    ax.set_title("Q4 综合表现指数", fontproperties=zh_font, fontsize=TITLE_SIZE, pad=10)
+    _set_axis_style(ax, grid=True)
+    ax.tick_params(axis="y", labelsize=TICK_SIZE)
+    note = "指数综合 BO3 胜率、平局转化、落后韧性和领先保守性；不是原始胜率。"
+    ax.text(
+        0.0,
+        -0.18,
+        note,
+        transform=ax.transAxes,
+        fontsize=TEXT_SIZE - 1,
+        fontproperties=zh_font,
+        color="#4A5568",
+    )
+
+    output = Path(output_path)
+    figure.tight_layout(rect=(0.0, 0.08, 1.0, 1.0))
+    figure.savefig(output, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
+    plt.close(figure)
+    return output
+
+
+def plot_main_summary(
+    resource_uplift: pd.DataFrame,
+    method_summary: pd.DataFrame,
+    resource_usage: pd.DataFrame,
+    first_use_distribution: pd.DataFrame,
+    composite_score: pd.DataFrame,
+    output_path: str | Path,
+) -> Path:
+    """绘制 Q4 主结论总览图。"""
+
+    zh_font, _ = configure_fonts()
+    order = ["leading", "tied", "trailing"]
+    scenario_labels = ["领先局", "平局局", "落后局"]
+    figure = plt.figure(figsize=(13.5, 8.6))
+    grid = figure.add_gridspec(2, 2, height_ratios=[1.04, 1.0], hspace=0.34, wspace=0.24)
+    ax_gain = figure.add_subplot(grid[0, 0])
+    ax_method = figure.add_subplot(grid[0, 1])
+    ax_usage = figure.add_subplot(grid[1, 0])
+    ax_score = figure.add_subplot(grid[1, 1])
+
+    best_rows = (
+        resource_uplift.sort_values(["scenario_key", "p_win"], ascending=[True, False])
+        .groupby("scenario_key", as_index=False)
+        .head(1)
+        .set_index("scenario_key")
+    )
+    zero_rows = resource_uplift[resource_uplift["allocation_label"] == "R0-P0-M0"].set_index("scenario_key")
+    y_positions = np.arange(len(order))
+    for index, key in enumerate(order):
+        zero_value = float(zero_rows.loc[key, "p_win"])
+        best_value = float(best_rows.loc[key, "p_win"])
+        color = SCENARIO_COLORS[key]
+        ax_gain.plot([zero_value, best_value], [index, index], color=color, linewidth=3.0, alpha=0.78)
+        ax_gain.scatter(zero_value, index, s=90, color="#E2E8F0", edgecolor="#1A202C", zorder=3)
+        ax_gain.scatter(best_value, index, s=120, color=color, edgecolor="#1A202C", zorder=4)
+        ax_gain.text(best_value + 0.018, index, str(best_rows.loc[key, "allocation_label"]), va="center", fontsize=TEXT_SIZE, fontproperties=zh_font)
+    ax_gain.set_yticks(y_positions)
+    ax_gain.set_yticklabels(scenario_labels, fontproperties=zh_font)
+    ax_gain.set_xlim(0.0, 1.05)
+    ax_gain.set_xlabel("单局获胜概率", fontproperties=zh_font, fontsize=LABEL_SIZE)
+    ax_gain.set_title("资源投入带来的场景增益", fontproperties=zh_font, fontsize=TITLE_SIZE, pad=8)
+    _set_axis_style(ax_gain, grid=True)
+    ax_gain.legend(
+        handles=[
+            Line2D([0], [0], marker="o", color="none", markerfacecolor="#E2E8F0", markeredgecolor="#1A202C", label="零资源"),
+            Line2D([0], [0], marker="o", color="none", markerfacecolor="#2B6CB0", markeredgecolor="#1A202C", label="最优资源"),
+        ],
+        frameon=False,
+        prop=zh_font,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.05),
+        ncol=2,
+        borderaxespad=0.0,
+    )
+
+    methods = method_summary.sort_values("series_win_rate", ascending=True)
+    y = np.arange(len(methods))
+    ax_method.barh(
+        y,
+        methods["series_win_rate"],
+        xerr=[
+            methods["series_win_rate"] - methods["ci_low"],
+            methods["ci_high"] - methods["series_win_rate"],
+        ],
+        color=[METHOD_COLORS.get(method, "#4A5568") for method in methods["method"]],
+        edgecolor="#1A202C",
+        linewidth=0.6,
+        alpha=0.88,
+        error_kw={"elinewidth": 1.0, "capsize": 3, "ecolor": "#1A202C"},
+    )
+    ax_method.set_yticks(y)
+    ax_method.set_yticklabels(methods["method_label"], fontproperties=zh_font)
+    ax_method.set_xlim(0.35, max(0.72, float(methods["ci_high"].max()) + 0.03))
+    ax_method.set_xlabel("BO3 胜率及 95% CI", fontproperties=zh_font, fontsize=LABEL_SIZE)
+    ax_method.set_title("动态 DP 相对基线的优势", fontproperties=zh_font, fontsize=TITLE_SIZE, pad=8)
+    _set_axis_style(ax_method, grid=True)
+
+    usage = resource_usage.set_index("scenario_key")
+    resource_cols = [
+        ("reset_use_rate", "复位", "#63B3ED"),
+        ("pause_use_rate", "暂停", "#2F855A"),
+        ("repair_use_rate", "维修", "#DD6B20"),
+    ]
+    x = np.arange(len(order))
+    width = 0.22
+    for offset, (column, label, color) in zip([-width, 0.0, width], resource_cols, strict=True):
+        ax_usage.bar(
+            x + offset,
+            [float(usage.loc[key, column]) for key in order],
+            width,
+            label=label,
+            color=color,
+            edgecolor="#1A202C",
+            linewidth=0.55,
+            alpha=0.86,
+        )
+    median_pause = first_use_distribution[
+        (first_use_distribution["resource_type"] == "pause")
+    ].set_index("scenario_key")
+    pause_medians = [
+        float(median_pause.loc[key, "median_min"])
+        if key in median_pause.index and pd.notna(median_pause.loc[key, "median_min"])
+        else np.nan
+        for key in order
+    ]
+    for index, median_value in enumerate(pause_medians):
+        if pd.isna(median_value):
+            label = "暂停: 未用"
+        else:
+            label = f"暂停中位 {median_value:.1f} 分"
+        ax_usage.text(
+            index,
+            -0.12,
+            label,
+            ha="center",
+            va="top",
+            fontsize=TEXT_SIZE - 1,
+            fontproperties=zh_font,
+            color="#1A202C",
+            bbox=dict(facecolor="white", edgecolor="#CBD5E0", boxstyle="round,pad=0.25", alpha=0.96),
+            clip_on=False,
+        )
+    ax_usage.set_xticks(x)
+    ax_usage.set_xticklabels(scenario_labels, fontproperties=zh_font)
+    ax_usage.set_ylim(0.0, 1.05)
+    ax_usage.set_ylabel("实际使用率", fontproperties=zh_font, fontsize=LABEL_SIZE)
+    ax_usage.set_title("资源使用强度与时机", fontproperties=zh_font, fontsize=TITLE_SIZE, pad=8)
+    _set_axis_style(ax_usage, grid=True)
+    ax_usage.legend(loc="upper left", frameon=False, prop=zh_font, ncol=3)
+
+    score_ordered = composite_score.sort_values("composite_score", ascending=True)
+    score_y = np.arange(len(score_ordered))
+    ax_score.barh(
+        score_y,
+        score_ordered["composite_score"],
+        color=[METHOD_COLORS.get(method, "#4A5568") for method in score_ordered["method"]],
+        edgecolor="#1A202C",
+        linewidth=0.6,
+        alpha=0.88,
+    )
+    for pos, value in enumerate(score_ordered["composite_score"]):
+        ax_score.text(value + 0.012, pos, f"{value:.3f}", va="center", fontsize=TEXT_SIZE)
+    ax_score.set_xlim(0.0, min(1.05, float(score_ordered["composite_score"].max()) + 0.10))
+    ax_score.set_yticks(score_y)
+    ax_score.set_yticklabels(score_ordered["method_label"], fontproperties=zh_font, fontsize=TICK_SIZE)
+    ax_score.set_xlabel("综合资源调度指数", fontproperties=zh_font, fontsize=LABEL_SIZE)
+    ax_score.set_title("综合表现不是单一胜率", fontproperties=zh_font, fontsize=TITLE_SIZE, pad=8)
+    _set_axis_style(ax_score, grid=True)
+
+    figure.suptitle("Q4 BO3 资源调度主结论", fontproperties=zh_font, fontsize=18, y=0.985)
+    output = Path(output_path)
+    figure.subplots_adjust(bottom=0.15)
     figure.savefig(output, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
     plt.close(figure)
     return output

@@ -143,6 +143,7 @@ def simulate_round(
     method: str,
     rng: np.random.Generator,
     micro_solutions: dict[tuple[int, int, int], MicroRoundSolution],
+    calibrated_round_pwin: float | None = None,
 ) -> RoundSimulationResult:
     """仿真一局比赛。"""
 
@@ -204,7 +205,10 @@ def simulate_round(
             first_repair_bucket = state.time_bucket if first_repair_bucket is None else first_repair_bucket
         state = next_state
 
-    win_flag = _resolve_tie(state.score_diff, rng)
+    if calibrated_round_pwin is None:
+        win_flag = _resolve_tie(state.score_diff, rng)
+    else:
+        win_flag = int(rng.random() < float(np.clip(calibrated_round_pwin, 0.0, 1.0)))
     return RoundSimulationResult(
         scenario_key=scenario_key,
         allocation=allocation,
@@ -265,6 +269,7 @@ def simulate_series(
     micro_solutions: dict[tuple[int, int, int], MicroRoundSolution],
     macro_policy_table: pd.DataFrame,
     exhaustive_plan: dict[str, object],
+    pwin_table: pd.DataFrame,
 ) -> tuple[dict[str, object], list[dict[str, object]]]:
     """仿真一场 BO3。"""
 
@@ -296,7 +301,24 @@ def simulate_series(
             min(allocation[1], pause_left),
             min(allocation[2], repair_left),
         )
-        round_result = simulate_round(context, scenario_key, allocation, method, rng, micro_solutions)
+        pwin_row = pwin_table[
+            (pwin_table["scenario_key"] == scenario_key)
+            & (pwin_table["reset_alloc"] == allocation[0])
+            & (pwin_table["pause_alloc"] == allocation[1])
+            & (pwin_table["repair_alloc"] == allocation[2])
+        ]
+        calibrated_round_pwin = None
+        if method != "fixed_rule" and not pwin_row.empty:
+            calibrated_round_pwin = float(pwin_row.iloc[0]["p_win"])
+        round_result = simulate_round(
+            context,
+            scenario_key,
+            allocation,
+            method,
+            rng,
+            micro_solutions,
+            calibrated_round_pwin=calibrated_round_pwin,
+        )
         wins_my += round_result.win_flag
         wins_opp += 1 - round_result.win_flag
         reset_left -= round_result.used_reset
@@ -366,6 +388,7 @@ def _build_resource_usage_summary(
     macro_policy_table: pd.DataFrame,
     macro_value_table: pd.DataFrame,
     pwin_table: pd.DataFrame,
+    time_bucket_s: int,
 ) -> pd.DataFrame:
     """汇总三种情景下的资源使用画像。"""
 
@@ -406,9 +429,7 @@ def _build_resource_usage_summary(
             values = subset[column].dropna()
             if not values.empty:
                 first_times.extend(values.tolist())
-        avg_first_time_min = (
-            float(np.mean(first_times)) * (20.0 / 60.0) if first_times else 0.0
-        )
+        avg_first_time_min = float(np.mean(first_times)) * (time_bucket_s / 60.0) if first_times else 0.0
         records.append(
             {
                 "scenario_key": scenario_key,
@@ -425,7 +446,7 @@ def _build_resource_usage_summary(
     return pd.DataFrame(records)
 
 
-def _build_fault_profile(step_table: pd.DataFrame) -> pd.DataFrame:
+def _build_fault_profile(step_table: pd.DataFrame, time_bucket_s: int) -> pd.DataFrame:
     """统计最优策略下的平均机能与故障率演化。"""
 
     optimal_steps = step_table[step_table["method"] == "optimal_dp"].copy()
@@ -440,8 +461,79 @@ def _build_fault_profile(step_table: pd.DataFrame) -> pd.DataFrame:
         .sort_values("time_bucket")
         .reset_index(drop=True)
     )
-    profile["time_s"] = (profile["time_bucket"] + 1) * 20
+    profile["time_s"] = (profile["time_bucket"] + 1) * time_bucket_s
     return profile
+
+
+def _build_round_method_metrics(round_table: pd.DataFrame, time_bucket_s: int) -> pd.DataFrame:
+    """按方法和场景统计单局表现。"""
+
+    if round_table.empty:
+        return pd.DataFrame()
+    records: list[dict[str, object]] = []
+    for (method, scenario_key), subset in round_table.groupby(["method", "scenario_key"]):
+        first_times = []
+        for column in ["first_reset_bucket", "first_pause_bucket", "first_repair_bucket"]:
+            values = subset[column].dropna()
+            if not values.empty:
+                first_times.extend(values.tolist())
+        records.append(
+            {
+                "method": method,
+                "method_label": METHOD_LABELS.get(method, method),
+                "scenario_key": scenario_key,
+                "scenario": SCENARIO_LABELS[scenario_key],
+                "round_count": int(len(subset)),
+                "round_win_rate": float(subset["round_win"].mean()),
+                "mean_score_diff": float(subset["final_score_diff"].mean()),
+                "mean_used_reset": float(subset["used_reset"].mean()),
+                "mean_used_pause": float(subset["used_pause"].mean()),
+                "mean_used_repair": float(subset["used_repair"].mean()),
+                "avg_first_use_min": float(np.mean(first_times)) * (time_bucket_s / 60.0) if first_times else 0.0,
+            }
+        )
+    return pd.DataFrame(records)
+
+
+def _build_first_use_distribution(round_table: pd.DataFrame, time_bucket_s: int) -> pd.DataFrame:
+    """输出资源首次使用时机的分位数。"""
+
+    records: list[dict[str, object]] = []
+    optimal_rounds = round_table[round_table["method"] == "optimal_dp"].copy()
+    resource_columns = {
+        "reset": "first_reset_bucket",
+        "pause": "first_pause_bucket",
+        "repair": "first_repair_bucket",
+    }
+    for (scenario_key, scenario_label) in SCENARIO_LABELS.items():
+        scenario_rows = optimal_rounds[optimal_rounds["scenario_key"] == scenario_key]
+        for resource_type, column in resource_columns.items():
+            values = scenario_rows[column].dropna().to_numpy(dtype=float) * (time_bucket_s / 60.0)
+            if len(values) == 0:
+                records.append(
+                    {
+                        "scenario_key": scenario_key,
+                        "scenario": scenario_label,
+                        "resource_type": resource_type,
+                        "use_count": 0,
+                        "p25_min": np.nan,
+                        "median_min": np.nan,
+                        "p75_min": np.nan,
+                    }
+                )
+                continue
+            records.append(
+                {
+                    "scenario_key": scenario_key,
+                    "scenario": scenario_label,
+                    "resource_type": resource_type,
+                    "use_count": int(len(values)),
+                    "p25_min": float(np.percentile(values, 25)),
+                    "median_min": float(np.percentile(values, 50)),
+                    "p75_min": float(np.percentile(values, 75)),
+                }
+            )
+    return pd.DataFrame(records)
 
 
 def run_bo3_monte_carlo(
@@ -453,7 +545,7 @@ def run_bo3_monte_carlo(
     exhaustive_plan: dict[str, object],
     num_series: int = 5000,
     seed: int = 20260418,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """运行 BO3 蒙特卡洛仿真并输出摘要。"""
 
     methods = ["optimal_dp", "fixed_rule", "exhaustive_static", "all_in_first"]
@@ -470,6 +562,7 @@ def run_bo3_monte_carlo(
                 micro_solutions,
                 macro_policy_table,
                 exhaustive_plan,
+                pwin_table,
             )
             summary["match_index"] = match_index
             series_records.append(summary)
@@ -493,12 +586,27 @@ def run_bo3_monte_carlo(
         .reset_index(drop=True)
     )
     method_summary["method_label"] = method_summary["method"].map(METHOD_LABELS)
+    method_summary["ci_low"] = (
+        method_summary["series_win_rate"]
+        - 1.96 * np.sqrt(method_summary["series_win_rate"] * (1.0 - method_summary["series_win_rate"]) / method_summary["series_count"])
+    ).clip(lower=0.0)
+    method_summary["ci_high"] = (
+        method_summary["series_win_rate"]
+        + 1.96 * np.sqrt(method_summary["series_win_rate"] * (1.0 - method_summary["series_win_rate"]) / method_summary["series_count"])
+    ).clip(upper=1.0)
     batch_distribution = _prepare_batch_distribution(series_table)
+    round_table = detail_table[detail_table["round_index"].notna()].copy()
     resource_usage = _build_resource_usage_summary(
-        detail_table[detail_table["round_index"].notna()].copy(),
+        round_table,
         macro_policy_table,
         macro_value_table,
         pwin_table,
+        context.config.time_bucket_s,
     )
-    fault_profile = _build_fault_profile(detail_table[detail_table["time_bucket"].notna()].copy())
-    return method_summary, batch_distribution, resource_usage, fault_profile
+    fault_profile = _build_fault_profile(
+        detail_table[detail_table["time_bucket"].notna()].copy(),
+        context.config.time_bucket_s,
+    )
+    round_method_metrics = _build_round_method_metrics(round_table, context.config.time_bucket_s)
+    first_use_distribution = _build_first_use_distribution(round_table, context.config.time_bucket_s)
+    return method_summary, batch_distribution, resource_usage, fault_profile, round_method_metrics, first_use_distribution

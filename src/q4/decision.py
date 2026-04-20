@@ -264,6 +264,116 @@ def _build_policy_frame(
     return pd.DataFrame(records)
 
 
+def _scenario_uplift_cap(context: Q4Context, scenario_key: str) -> float:
+    """返回资源对单局胜率的最大校准增益。"""
+
+    if scenario_key == "leading":
+        return context.config.max_uplift_leading
+    if scenario_key == "trailing":
+        return context.config.max_uplift_trailing
+    return context.config.max_uplift_tied
+
+
+def _resource_potential(
+    reset_alloc: int,
+    pause_alloc: int,
+    repair_alloc: int,
+    scenario_key: str,
+    context: Q4Context,
+) -> float:
+    """给资源配额一个有上限的场景化先验收益。"""
+
+    reset_part = 0.02 * reset_alloc / max(context.config.max_reset, 1)
+    pause_part = 0.06 * pause_alloc / max(context.config.max_pause, 1)
+    repair_part = 0.08 * repair_alloc / max(context.config.max_repair, 1)
+    scenario_factor = {"leading": 0.35, "tied": 1.0, "trailing": 0.85}[scenario_key]
+    return context.config.resource_uplift_scale * scenario_factor * (reset_part + pause_part + repair_part)
+
+
+def _calibrated_round_pwin(
+    raw_pwin: float,
+    raw_zero_pwin: float,
+    reset_alloc: int,
+    pause_alloc: int,
+    repair_alloc: int,
+    scenario_key: str,
+    context: Q4Context,
+) -> float:
+    """把 Q4 单局胜率锚定到最终 Q3 基线，并保留有限资源增益。"""
+
+    base = float(context.base_win_prob[scenario_key])
+    raw_uplift = max(0.0, float(raw_pwin) - float(raw_zero_pwin))
+    resource_uplift = raw_uplift * 0.35 + _resource_potential(reset_alloc, pause_alloc, repair_alloc, scenario_key, context)
+    capped_uplift = min(_scenario_uplift_cap(context, scenario_key), resource_uplift)
+    target = base + capped_uplift * max(0.0, 1.0 - base)
+    if raw_pwin < raw_zero_pwin:
+        target = base - min(base, abs(raw_pwin - raw_zero_pwin) * 0.35)
+    return float(np.clip(target, 0.0, 1.0))
+
+
+def calibrate_round_outputs(
+    context: Q4Context,
+    pwin_table: pd.DataFrame,
+    usage_distribution: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """用最终 Q3 三场景基础胜率校准 Q4 单局表与实际使用分布。"""
+
+    calibrated_pwin = pwin_table.copy()
+    zero_lookup = {
+        str(row["scenario_key"]): float(row["p_win"])
+        for _, row in calibrated_pwin[
+            (calibrated_pwin["reset_alloc"] == 0)
+            & (calibrated_pwin["pause_alloc"] == 0)
+            & (calibrated_pwin["repair_alloc"] == 0)
+        ].iterrows()
+    }
+    calibrated_values: dict[tuple[str, int, int, int], float] = {}
+    calibrated_pwin["raw_p_win"] = calibrated_pwin["p_win"].astype(float)
+    calibrated_pwin["q3_base_win"] = calibrated_pwin["scenario_key"].map(context.base_win_prob).astype(float)
+    for index, row in calibrated_pwin.iterrows():
+        key = (
+            str(row["scenario_key"]),
+            int(row["reset_alloc"]),
+            int(row["pause_alloc"]),
+            int(row["repair_alloc"]),
+        )
+        target = _calibrated_round_pwin(
+            raw_pwin=float(row["raw_p_win"]),
+            raw_zero_pwin=zero_lookup[str(row["scenario_key"])],
+            reset_alloc=int(row["reset_alloc"]),
+            pause_alloc=int(row["pause_alloc"]),
+            repair_alloc=int(row["repair_alloc"]),
+            scenario_key=str(row["scenario_key"]),
+            context=context,
+        )
+        calibrated_values[key] = target
+        calibrated_pwin.at[index, "p_win"] = target
+    calibrated_pwin["calibration_gap_vs_q3"] = calibrated_pwin["p_win"] - calibrated_pwin["q3_base_win"]
+
+    calibrated_usage = usage_distribution.copy()
+    for key, target_pwin in calibrated_values.items():
+        scenario_key, reset_alloc, pause_alloc, repair_alloc = key
+        mask = (
+            (calibrated_usage["scenario_key"] == scenario_key)
+            & (calibrated_usage["reset_alloc"] == reset_alloc)
+            & (calibrated_usage["pause_alloc"] == pause_alloc)
+            & (calibrated_usage["repair_alloc"] == repair_alloc)
+        )
+        local = calibrated_usage.loc[mask]
+        raw_win = float(local["win_prob"].sum())
+        raw_lose = float(local["lose_prob"].sum())
+        win_scale = target_pwin / raw_win if raw_win > 0 else 0.0
+        lose_scale = (1.0 - target_pwin) / raw_lose if raw_lose > 0 else 0.0
+        calibrated_usage.loc[mask, "raw_win_prob"] = calibrated_usage.loc[mask, "win_prob"]
+        calibrated_usage.loc[mask, "raw_lose_prob"] = calibrated_usage.loc[mask, "lose_prob"]
+        calibrated_usage.loc[mask, "win_prob"] = calibrated_usage.loc[mask, "win_prob"] * win_scale
+        calibrated_usage.loc[mask, "lose_prob"] = calibrated_usage.loc[mask, "lose_prob"] * lose_scale
+        calibrated_usage.loc[mask, "total_prob"] = (
+            calibrated_usage.loc[mask, "win_prob"] + calibrated_usage.loc[mask, "lose_prob"]
+        )
+    return calibrated_pwin, calibrated_usage
+
+
 def solve_micro_round(context: Q4Context, allocation: tuple[int, int, int]) -> MicroRoundSolution:
     """对单个资源配额方案做局内有限时域动态规划。"""
 
@@ -414,11 +524,10 @@ def build_pwin_table(
         solutions[allocation] = solution
         pwin_records.append(solution.pwin_record)
         usage_records.append(solution.usage_distribution)
-    return (
-        pd.concat(pwin_records, ignore_index=True),
-        pd.concat(usage_records, ignore_index=True),
-        solutions,
-    )
+    pwin_table = pd.concat(pwin_records, ignore_index=True)
+    usage_distribution = pd.concat(usage_records, ignore_index=True)
+    pwin_table, usage_distribution = calibrate_round_outputs(context, pwin_table, usage_distribution)
+    return pwin_table, usage_distribution, solutions
 
 
 def save_micro_solutions(

@@ -1,0 +1,4 @@
+﻿scenario_key,scenario,allocation_label,q3_base_win,q4_zero_resource_pwin,raw_zero_resource_pwin,gap
+leading,领先局,R0-P0-M0,1.0,1.0,0.8598892745034958,0.0
+tied,平局局,R0-P0-M0,0.544,0.544,0.5426002674478694,0.0
+trailing,落后局,R0-P0-M0,0.04,0.04,0.21686328353241913,0.0
