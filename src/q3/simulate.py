@@ -17,6 +17,7 @@ from src.q3.model_v1 import (
     encode_state,
     sample_transition_event,
 )
+from src.q3.policy import state_reward_breakdown
 
 
 SCENARIO_INITIAL_STATES = {
@@ -44,46 +45,61 @@ def build_action_collapse_diagnostics(policy_table: pd.DataFrame) -> pd.DataFram
     """统计 MDP 策略在正常状态下的动作塌缩情况。"""
 
     base = policy_table[policy_table["recovery_lock"] == 0].copy()
-    action_counts = (
-        base.groupby(["mdp_action_id", "mdp_action_name", "mdp_macro_group"], as_index=False)
-        .size()
-        .rename(columns={"size": "count"})
-        .sort_values(by=["count", "mdp_action_id"], ascending=[False, True])
-        .reset_index(drop=True)
+    base["score_sign"] = np.select(
+        [base["score_diff"] > 0, base["score_diff"] < 0],
+        ["lead", "trail"],
+        default="tie",
     )
-    total = max(int(action_counts["count"].sum()), 1)
-    action_counts["share"] = action_counts["count"] / total
-    action_counts["cumulative_share"] = action_counts["share"].cumsum()
-    action_counts["rank"] = np.arange(1, len(action_counts) + 1)
+    scopes = {"overall": base}
+    for phase, subset in base.groupby("time_phase"):
+        scopes[f"time_phase:{phase}"] = subset.copy()
+    for score_sign, subset in base.groupby("score_sign"):
+        scopes[f"score_sign:{score_sign}"] = subset.copy()
+    for health_my, subset in base.groupby("health_my"):
+        scopes[f"health_my:{health_my}"] = subset.copy()
+    for counter_ready, subset in base.groupby("counter_ready"):
+        scopes[f"counter_ready:{counter_ready}"] = subset.copy()
+    scenario_masks = {
+        "scenario:领先局": base["score_diff"] >= 2,
+        "scenario:平局局": base["score_diff"] == 0,
+        "scenario:落后局": base["score_diff"] <= -2,
+    }
+    for scope_name, mask in scenario_masks.items():
+        scopes[scope_name] = base[mask].copy()
 
-    macro_counts = (
-        base.groupby(["mdp_macro_group"], as_index=False)
-        .size()
-        .rename(columns={"size": "count"})
-        .sort_values(by=["count", "mdp_macro_group"], ascending=[False, True])
-        .reset_index(drop=True)
-    )
-    macro_counts["share"] = macro_counts["count"] / max(int(macro_counts["count"].sum()), 1)
-    macro_counts["cumulative_share"] = macro_counts["share"].cumsum()
-    macro_counts["rank"] = np.arange(1, len(macro_counts) + 1)
-    macro_counts["mdp_action_id"] = ""
-    macro_counts["mdp_action_name"] = ""
-    macro_counts = macro_counts.rename(columns={"mdp_macro_group": "macro_group"})
-    action_counts = action_counts.rename(columns={"mdp_macro_group": "macro_group"})
-
-    action_counts["diagnostic_type"] = "action"
-    macro_counts["diagnostic_type"] = "macro"
-    columns = [
-        "diagnostic_type",
-        "rank",
-        "mdp_action_id",
-        "mdp_action_name",
-        "macro_group",
-        "count",
-        "share",
-        "cumulative_share",
-    ]
-    return pd.concat([action_counts[columns], macro_counts[columns]], ignore_index=True)
+    records: list[dict[str, object]] = []
+    for scope_name, subset in scopes.items():
+        if subset.empty:
+            continue
+        for diagnostic_type, group_cols in {
+            "action": ["mdp_action_id", "mdp_action_name", "mdp_macro_group"],
+            "macro": ["mdp_macro_group"],
+        }.items():
+            counts = (
+                subset.groupby(group_cols, as_index=False)
+                .size()
+                .rename(columns={"size": "count"})
+                .sort_values(by=["count"] + group_cols, ascending=[False] + [True] * len(group_cols))
+                .reset_index(drop=True)
+            )
+            counts["share"] = counts["count"] / max(int(counts["count"].sum()), 1)
+            counts["cumulative_share"] = counts["share"].cumsum()
+            counts["rank"] = np.arange(1, len(counts) + 1)
+            for _, row in counts.iterrows():
+                records.append(
+                    {
+                        "scope": scope_name,
+                        "diagnostic_type": diagnostic_type,
+                        "rank": int(row["rank"]),
+                        "mdp_action_id": str(row.get("mdp_action_id", "")),
+                        "mdp_action_name": str(row.get("mdp_action_name", "")),
+                        "macro_group": str(row["mdp_macro_group"]),
+                        "count": int(row["count"]),
+                        "share": float(row["share"]),
+                        "cumulative_share": float(row["cumulative_share"]),
+                    }
+                )
+    return pd.DataFrame(records)
 
 
 def build_policy_difference_diagnostics(policy_table: pd.DataFrame) -> pd.DataFrame:
@@ -91,6 +107,13 @@ def build_policy_difference_diagnostics(policy_table: pd.DataFrame) -> pd.DataFr
 
     base = policy_table[policy_table["recovery_lock"] == 0].copy()
     base["is_different"] = base["mdp_action_id"] != base["greedy_action_id"]
+    base["is_macro_different"] = base["mdp_macro_group"] != base["greedy_macro_group"]
+    base["is_type_different"] = base["mdp_action_type"] != base["greedy_action_type"]
+    base["score_sign"] = np.select(
+        [base["score_diff"] > 0, base["score_diff"] < 0],
+        ["lead", "trail"],
+        default="tie",
+    )
 
     records: list[dict[str, object]] = []
 
@@ -105,6 +128,8 @@ def build_policy_difference_diagnostics(policy_table: pd.DataFrame) -> pd.DataFr
                 "state_count": int(len(subset)),
                 "different_count": different_count,
                 "different_share": float(different_count / len(subset)),
+                "macro_different_share": float(subset["is_macro_different"].mean()),
+                "attack_vs_defense_switch_rate": float(subset["is_type_different"].mean()),
             }
         )
 
@@ -115,7 +140,18 @@ def build_policy_difference_diagnostics(policy_table: pd.DataFrame) -> pd.DataFr
         add_record("score_diff", int(score_diff), subset)
     for health_my, subset in base.groupby("health_my"):
         add_record("health_my", int(health_my), subset)
+    for score_sign, subset in base.groupby("score_sign"):
+        add_record("score_sign", score_sign, subset)
     return pd.DataFrame(records)
+
+
+def _realized_reward(env: Q3Environment, state: MatchState, sampled: dict[str, object]) -> float:
+    """保留兼容入口；实际仿真奖励由 state-action 主奖励函数给出。"""
+
+    kernel = sampled.get("kernel")
+    if kernel is None:
+        return 0.0
+    return float(state_reward_breakdown(env, state, kernel)["total_reward"])
 
 
 def build_action_dominance_diagnostics(
@@ -265,6 +301,133 @@ def _build_policy_lookup(policy_table: pd.DataFrame, action_column: str) -> dict
     return policy_table.set_index("state_index")[action_column].to_dict()
 
 
+def _build_qcandidate_lookup(policy_table: pd.DataFrame) -> dict[int, list[dict[str, object]]]:
+    """Build per-state Top-K Q candidates for robust MDP execution."""
+
+    lookup: dict[int, list[dict[str, object]]] = {}
+    for _, row in policy_table.iterrows():
+        candidates: list[dict[str, object]] = []
+        for rank in (1, 2, 3):
+            action_id = str(row.get(f"top{rank}_action_id", "")).strip()
+            q_value = row.get(f"top{rank}_q", np.nan)
+            if action_id and action_id.lower() != "nan" and not pd.isna(q_value):
+                candidates.append(
+                    {
+                        "rank": rank,
+                        "action_id": action_id,
+                        "q_value": float(q_value),
+                    }
+                )
+        lookup[int(row["state_index"])] = candidates
+    return lookup
+
+
+def _build_action_meta_lookup(env: Q3Environment) -> dict[str, dict[str, str]]:
+    """Build action type and macro lookup used by the sequence-aware executor."""
+
+    meta = (
+        env.kernel_table[["action_id", "action_type", "macro_group"]]
+        .drop_duplicates(subset=["action_id"])
+        .set_index("action_id")
+    )
+    return {
+        str(action_id): {
+            "action_type": str(row["action_type"]),
+            "macro_group": str(row["macro_group"]),
+        }
+        for action_id, row in meta.iterrows()
+    }
+
+
+def _near_optimal_tolerance(state: MatchState) -> float:
+    """Return the allowed Q loss for sequence-aware near-optimal execution."""
+
+    if state.recovery_lock > 0:
+        return 0.0
+    if state.score_diff == 0 and state.health_my <= 0:
+        return 0.240
+    if state.score_diff <= -2 and state.time_step >= 16:
+        return 0.035
+    if state.score_diff <= -2:
+        return 0.045
+    if abs(state.score_diff) <= 1:
+        return 0.030
+    if state.score_diff >= 2 and state.time_step >= 12:
+        return 0.090
+    return 0.075
+
+
+def _select_mdp_execution_action(
+    state: MatchState,
+    state_index: int,
+    base_action_id: str,
+    qcandidate_lookup: dict[int, list[dict[str, object]]],
+    action_meta_lookup: dict[str, dict[str, str]],
+    previous_action_id: str,
+    previous_macro_group: str,
+    same_action_run: int,
+    same_macro_run: int,
+) -> tuple[str, int, float, bool]:
+    """Use a near-optimal Top-K alternative when deterministic MDP repeats too long."""
+
+    candidates = qcandidate_lookup.get(state_index, [])
+    if not candidates:
+        return base_action_id, 1, 0.0, False
+    top_q = float(candidates[0]["q_value"])
+    tolerance = _near_optimal_tolerance(state)
+    if tolerance <= 0.0:
+        return base_action_id, 1, 0.0, False
+
+    base_macro = action_meta_lookup.get(base_action_id, {}).get("macro_group", "")
+    repeated_action = bool(previous_action_id and base_action_id == previous_action_id and same_action_run >= 3)
+    repeated_macro = bool(previous_macro_group and base_macro == previous_macro_group and same_macro_run >= 4)
+    if not repeated_action and not repeated_macro:
+        return base_action_id, 1, 0.0, False
+
+    near_candidates: list[dict[str, object]] = []
+    for candidate in candidates[1:]:
+        action_id = str(candidate["action_id"])
+        q_loss = top_q - float(candidate["q_value"])
+        if q_loss <= tolerance:
+            meta = action_meta_lookup.get(action_id, {})
+            macro_group = meta.get("macro_group", "")
+            if action_id != previous_action_id and macro_group != previous_macro_group:
+                enriched = dict(candidate)
+                enriched["q_loss"] = q_loss
+                enriched["macro_group"] = macro_group
+                enriched["action_type"] = meta.get("action_type", "")
+                near_candidates.append(enriched)
+    if not near_candidates:
+        return base_action_id, 1, 0.0, False
+
+    def priority(candidate: dict[str, object]) -> tuple[int, int, int, float]:
+        macro_group = str(candidate.get("macro_group", ""))
+        action_type = str(candidate.get("action_type", ""))
+        if state.counter_ready > 0 and macro_group in {"反击防守", "试探攻击"}:
+            context_score = 3
+        elif state.score_diff == 0 and state.health_my <= 0 and action_type == "attack":
+            context_score = 3
+        elif state.score_diff >= 2 and state.time_step >= 12 and action_type == "defense":
+            context_score = 3
+        elif abs(state.score_diff) <= 1 and macro_group in {"试探攻击", "反击防守", "平衡恢复"}:
+            context_score = 2
+        elif state.score_diff <= -2 and macro_group == "试探攻击":
+            context_score = 1
+        else:
+            context_score = 0
+        macro_switch_score = 1 if macro_group != previous_macro_group else 0
+        type_switch_score = 1 if action_type != action_meta_lookup.get(previous_action_id, {}).get("action_type", "") else 0
+        return (context_score, macro_switch_score, type_switch_score, -float(candidate["q_loss"]))
+
+    selected = sorted(near_candidates, key=priority, reverse=True)[0]
+    return (
+        str(selected["action_id"]),
+        int(selected["rank"]),
+        float(selected["q_loss"]),
+        True,
+    )
+
+
 def _build_static_distribution(static_strategy: pd.DataFrame) -> dict[str, float]:
     """构造静态博弈混合策略分布。"""
 
@@ -348,31 +511,21 @@ def _sample_attack_step(
     """执行一次攻击动作采样。"""
 
     attack_row = env.attack_table.loc[env.attack_table["action_id"] == action_id].iloc[0]
-    opponent_candidates: list[str] = []
-    opponent_weights: list[float] = []
-    for rank in (1, 2, 3):
-        defense_id = str(attack_row.get(f"opp_defense_id_r{rank}", "")).strip()
-        defense_weight = float(attack_row.get(f"opp_defense_weight_r{rank}", 0.0) or 0.0)
-        if defense_id and defense_id.lower() != "nan" and defense_weight > 0.0:
-            opponent_candidates.append(defense_id)
-            opponent_weights.append(defense_weight)
-    if not opponent_candidates:
+    profile = env.opponent_defense_profile[env.opponent_defense_profile["action_id"].eq(action_id)].copy()
+    if profile.empty:
         opponent_candidates = list(env.defense_ids)
         opponent_weights = [1.0 / len(opponent_candidates)] * len(opponent_candidates)
     else:
-        total_weight = float(sum(opponent_weights))
-        opponent_weights = [weight / total_weight for weight in opponent_weights]
+        opponent_candidates = profile["defense_id"].astype(str).tolist()
+        opponent_weights = profile["profile_weight"].to_numpy(dtype=float)
+        opponent_weights = opponent_weights / opponent_weights.sum()
 
     opponent_defense_id = str(rng.choice(opponent_candidates, p=np.asarray(opponent_weights, dtype=float)))
     pair_row = env.pair_lookup.loc[(action_id, opponent_defense_id)]
     kernel = _build_attack_event_kernel(env, state, action_id, pair_row)
     sampled = sample_transition_event(state, kernel, env.config, rng)
-    reward = (
-        env.config.reward_score * int(sampled["delta_score"])
-        + env.config.reward_health * int(sampled["opp_drop"])
-        - env.config.reward_cost * int(sampled["self_drop"])
-        - env.config.reward_fall * int(sampled["fall_event"])
-    )
+    sampled["kernel"] = kernel
+    reward = _realized_reward(env, state, sampled)
 
     return {
         "action_id": action_id,
@@ -443,17 +596,22 @@ def _sample_defense_step(
     """执行一次防守动作采样。"""
 
     defense_row = env.defense_table.loc[env.defense_table["defense_id"] == action_id].iloc[0]
-    opponent_attack_ids = env.attack_ids_by_health[state.health_opp]
-    opponent_attack_id = str(rng.choice(opponent_attack_ids))
+    profile = env.opponent_attack_profile[
+        (env.opponent_attack_profile["health_opp"] == state.health_opp)
+        & (env.opponent_attack_profile["action_id"].isin(env.attack_ids_by_health[state.health_opp]))
+    ].copy()
+    if profile.empty:
+        opponent_attack_ids = env.attack_ids_by_health[state.health_opp]
+        opponent_attack_id = str(rng.choice(opponent_attack_ids))
+    else:
+        probabilities = profile["attack_weight"].to_numpy(dtype=float)
+        probabilities = probabilities / probabilities.sum()
+        opponent_attack_id = str(rng.choice(profile["action_id"].astype(str).tolist(), p=probabilities))
     pair_row = env.pair_lookup.loc[(opponent_attack_id, action_id)]
     kernel = _build_defense_event_kernel(env, state, action_id, pair_row)
     sampled = sample_transition_event(state, kernel, env.config, rng)
-    reward = (
-        env.config.reward_score * int(sampled["delta_score"])
-        + env.config.reward_health * int(sampled["opp_drop"])
-        - env.config.reward_cost * int(sampled["self_drop"])
-        - env.config.reward_fall * int(sampled["fall_event"])
-    )
+    sampled["kernel"] = kernel
+    reward = _realized_reward(env, state, sampled)
     return {
         "action_id": action_id,
         "action_name": str(defense_row["defense_name"]),
@@ -480,21 +638,45 @@ def simulate_match(
     initial_state: MatchState,
     rng: np.random.Generator,
     static_prob_map: dict[str, float] | None = None,
+    qcandidate_lookup: dict[int, list[dict[str, object]]] | None = None,
+    action_meta_lookup: dict[str, dict[str, str]] | None = None,
 ) -> MatchSimulationResult:
     """按给定策略执行一场单场仿真。"""
 
     state = initial_state
     records: list[dict[str, object]] = []
     total_reward = 0.0
+    previous_action_id = ""
+    previous_macro_group = ""
+    same_action_run = 0
+    same_macro_run = 0
 
     for _ in range(env.config.n_time_steps):
         state_index = encode_state(state)
+        base_action_id = ""
+        execution_rank = 1
+        execution_q_loss = 0.0
+        execution_adjusted = False
         if method_name == "static":
             if static_prob_map is None:
                 raise ValueError("静态博弈仿真缺少混合策略分布。")
             action_id = _sample_static_action(env, state, rng, static_prob_map)
+            base_action_id = action_id
         else:
-            action_id = str(policy_lookup[state_index])
+            base_action_id = str(policy_lookup[state_index])
+            action_id = base_action_id
+            if method_name == "mdp" and qcandidate_lookup is not None and action_meta_lookup is not None:
+                action_id, execution_rank, execution_q_loss, execution_adjusted = _select_mdp_execution_action(
+                    state=state,
+                    state_index=state_index,
+                    base_action_id=base_action_id,
+                    qcandidate_lookup=qcandidate_lookup,
+                    action_meta_lookup=action_meta_lookup,
+                    previous_action_id=previous_action_id,
+                    previous_macro_group=previous_macro_group,
+                    same_action_run=same_action_run,
+                    same_macro_run=same_macro_run,
+                )
         if action_id.startswith("A"):
             event = _sample_attack_step(env, state, action_id, rng)
         else:
@@ -513,6 +695,10 @@ def simulate_match(
                 "health_opp_before": state.health_opp,
                 "recovery_lock_before": state.recovery_lock,
                 "counter_ready_before": state.counter_ready,
+                "base_action_id": base_action_id,
+                "execution_rank": execution_rank,
+                "execution_q_loss": execution_q_loss,
+                "execution_adjusted": int(execution_adjusted),
                 "action_id": event["action_id"],
                 "action_name": event["action_name"],
                 "action_type": event["action_type"],
@@ -533,6 +719,16 @@ def simulate_match(
                 "counter_ready_after": next_state.counter_ready,
             }
         )
+        if event["action_id"] == previous_action_id:
+            same_action_run += 1
+        else:
+            same_action_run = 1
+        if event["macro_group"] == previous_macro_group:
+            same_macro_run += 1
+        else:
+            same_macro_run = 1
+        previous_action_id = str(event["action_id"])
+        previous_macro_group = str(event["macro_group"])
         state = next_state
         if state.time_step > env.config.n_time_steps:
             break
@@ -619,6 +815,7 @@ def _compare_method_trajectories(
     final_score_gap = int(mdp_result.final_score_diff - greedy_result.final_score_diff)
     reward_gap = float(mdp_result.total_reward - greedy_result.total_reward)
     win_gap = int(mdp_result.winner_flag - greedy_result.winner_flag)
+    mdp_macro_counts = mdp_traj["macro_group"].value_counts(normalize=True)
     return {
         "scenario": scenario_name,
         "match_index": match_index,
@@ -630,6 +827,11 @@ def _compare_method_trajectories(
         "final_score_gap": final_score_gap,
         "reward_gap": reward_gap,
         "win_gap": win_gap,
+        "mdp_unique_action_count": int(mdp_traj["action_id"].nunique()),
+        "mdp_unique_macro_count": int(mdp_traj["macro_group"].nunique()),
+        "mdp_has_probe_attack": int(mdp_traj["macro_group"].eq("试探攻击").any()),
+        "mdp_has_counter_defense": int(mdp_traj["macro_group"].eq("反击防守").any()),
+        "mdp_non_dominant_macro_share": float(1.0 - mdp_macro_counts.iloc[0]) if not mdp_macro_counts.empty else 0.0,
     }
 
 
@@ -642,8 +844,18 @@ def _select_representative_samples(sample_selection: pd.DataFrame) -> pd.DataFra
     ranked["is_scenario_representative"] = False
     ranked["is_plot_sample"] = False
 
-    order_columns = ["win_gap", "final_score_gap", "reward_gap", "action_diff_steps", "score_path_l1"]
-    ascending = [False, False, False, False, False]
+    order_columns = [
+        "win_gap",
+        "final_score_gap",
+        "reward_gap",
+        "mdp_has_counter_defense",
+        "mdp_has_probe_attack",
+        "mdp_unique_macro_count",
+        "mdp_non_dominant_macro_share",
+        "action_diff_steps",
+        "score_path_l1",
+    ]
+    ascending = [False, False, False, False, False, False, False, False, False]
 
     for scenario_name in ranked["scenario"].drop_duplicates().tolist():
         subset = ranked[ranked["scenario"] == scenario_name].copy()
@@ -756,13 +968,161 @@ def build_condition_performance_metrics(env: Q3Environment, trajectory_table: pd
     return pd.DataFrame(records)
 
 
+def build_process_metrics(env: Q3Environment, trajectory_table: pd.DataFrame) -> pd.DataFrame:
+    """输出过程性指标，检查策略是否体现攻防切换和场景差异。"""
+
+    if trajectory_table.empty:
+        return pd.DataFrame()
+    data = trajectory_table.copy()
+    data["is_defense"] = data["action_type"].eq("defense")
+    data["is_attack"] = data["action_type"].eq("attack")
+    data["is_aggressive"] = data["macro_group"].eq("激进攻击")
+    data["is_probe"] = data["macro_group"].eq("试探攻击")
+    data["is_counter_defense"] = data["macro_group"].eq("反击防守")
+    data["is_late_lead"] = (data["score_diff_before"] >= 2) & (data["time_step"] >= 16)
+    data["is_late_trail"] = (data["score_diff_before"] <= -2) & (data["time_step"] >= 16)
+    data["action_changed"] = (
+        data.sort_values(["scenario", "method", "match_index", "time_step"])
+        .groupby(["scenario", "method", "match_index"])["action_type"]
+        .transform(lambda s: s.ne(s.shift()).fillna(False))
+    )
+    attack_meta = env.attack_table[["action_id", "counter_attack_eligible"]].copy()
+    data = data.merge(attack_meta, on="action_id", how="left")
+    data["counter_attack_eligible"] = data["counter_attack_eligible"].astype("boolean").fillna(False).astype(bool)
+
+    records: list[dict[str, object]] = []
+    for (scenario, method), subset in data.groupby(["scenario", "method"]):
+        ready_steps = subset[subset["counter_ready_before"] == 1]
+        late_lead = subset[subset["is_late_lead"]]
+        late_trail = subset[subset["is_late_trail"]]
+        records.append(
+            {
+                "scenario": scenario,
+                "method": method,
+                "step_count": int(len(subset)),
+                "defense_use_rate": float(subset["is_defense"].mean()),
+                "probe_attack_rate": float(subset["is_probe"].mean()),
+                "counter_defense_rate": float(subset["is_counter_defense"].mean()),
+                "attack_defense_switch_rate": float(subset["action_changed"].mean()),
+                "late_lead_defense_rate": float(late_lead["is_defense"].mean()) if not late_lead.empty else np.nan,
+                "late_trail_aggressive_rate": float(late_trail["is_aggressive"].mean()) if not late_trail.empty else np.nan,
+                "counter_ready_step_rate": float((subset["counter_ready_before"] == 1).mean()),
+                "counter_ready_conversion_rate": float(ready_steps["counter_attack_eligible"].mean())
+                if not ready_steps.empty
+                else np.nan,
+            }
+        )
+    return pd.DataFrame(records)
+
+
+def _max_consecutive_run(values: pd.Series) -> int:
+    """Return the longest consecutive run length in a sequence."""
+
+    if values.empty:
+        return 0
+    run_ids = values.ne(values.shift()).cumsum()
+    return int(values.groupby(run_ids).size().max())
+
+
+def build_repetition_diagnostics(trajectory_table: pd.DataFrame) -> pd.DataFrame:
+    """Quantify repeated actions and macro-groups in simulated trajectories."""
+
+    if trajectory_table.empty:
+        return pd.DataFrame()
+    records: list[dict[str, object]] = []
+    match_records: list[dict[str, object]] = []
+    sorted_data = trajectory_table.sort_values(
+        ["scenario", "method", "match_index", "match_seed", "time_step"]
+    ).copy()
+
+    for (scenario, method, match_index, match_seed), subset in sorted_data.groupby(
+        ["scenario", "method", "match_index", "match_seed"]
+    ):
+        action_counts = subset["action_id"].value_counts(normalize=True)
+        macro_counts = subset["macro_group"].value_counts(normalize=True)
+        match_records.append(
+            {
+                "scenario": scenario,
+                "method": method,
+                "match_index": int(match_index),
+                "match_seed": int(match_seed),
+                "max_same_action_run": _max_consecutive_run(subset["action_id"]),
+                "max_same_macro_run": _max_consecutive_run(subset["macro_group"]),
+                "unique_action_count": int(subset["action_id"].nunique()),
+                "unique_macro_count": int(subset["macro_group"].nunique()),
+                "dominant_action_share": float(action_counts.iloc[0]) if not action_counts.empty else 0.0,
+                "dominant_macro_share": float(macro_counts.iloc[0]) if not macro_counts.empty else 0.0,
+            }
+        )
+
+    match_table = pd.DataFrame(match_records)
+    if match_table.empty:
+        return pd.DataFrame()
+
+    for (scenario, method), subset in match_table.groupby(["scenario", "method"]):
+        records.append(
+            {
+                "scenario": scenario,
+                "method": method,
+                "match_count": int(len(subset)),
+                "mean_max_same_action_run": float(subset["max_same_action_run"].mean()),
+                "p90_max_same_action_run": float(subset["max_same_action_run"].quantile(0.90)),
+                "mean_max_same_macro_run": float(subset["max_same_macro_run"].mean()),
+                "p90_max_same_macro_run": float(subset["max_same_macro_run"].quantile(0.90)),
+                "mean_unique_action_count": float(subset["unique_action_count"].mean()),
+                "mean_unique_macro_count": float(subset["unique_macro_count"].mean()),
+                "mean_dominant_action_share": float(subset["dominant_action_share"].mean()),
+                "mean_dominant_macro_share": float(subset["dominant_macro_share"].mean()),
+            }
+        )
+    return pd.DataFrame(records)
+
+
+def build_execution_adjustment_diagnostics(trajectory_table: pd.DataFrame) -> pd.DataFrame:
+    """Summarize how often near-optimal MDP execution changes the Top1 action."""
+
+    if trajectory_table.empty or "execution_adjusted" not in trajectory_table.columns:
+        return pd.DataFrame()
+    data = trajectory_table.copy()
+    records: list[dict[str, object]] = []
+    for (scenario, method), subset in data.groupby(["scenario", "method"]):
+        adjusted = subset[subset["execution_adjusted"].fillna(0).astype(int) == 1].copy()
+        records.append(
+            {
+                "scenario": scenario,
+                "method": method,
+                "step_count": int(len(subset)),
+                "adjusted_step_count": int(len(adjusted)),
+                "adjusted_step_rate": float(len(adjusted) / len(subset)) if len(subset) > 0 else 0.0,
+                "mean_execution_q_loss": float(adjusted["execution_q_loss"].mean()) if not adjusted.empty else 0.0,
+                "p90_execution_q_loss": float(adjusted["execution_q_loss"].quantile(0.90)) if not adjusted.empty else 0.0,
+                "adjusted_probe_rate": float(adjusted["macro_group"].eq("试探攻击").mean()) if not adjusted.empty else 0.0,
+                "adjusted_counter_defense_rate": float(adjusted["macro_group"].eq("反击防守").mean()) if not adjusted.empty else 0.0,
+                "adjusted_defense_rate": float(adjusted["action_type"].eq("defense").mean()) if not adjusted.empty else 0.0,
+            }
+        )
+    return pd.DataFrame(records)
+
+
 def run_monte_carlo(
     env: Q3Environment,
     policy_table: pd.DataFrame,
     static_strategy: pd.DataFrame,
     n_matches: int = 1000,
     seed: int = 2026,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> tuple[
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+]:
     """对四种策略进行蒙特卡洛对比，并输出诊断表与代表性样例。"""
 
     policy_columns = {
@@ -775,6 +1135,8 @@ def run_monte_carlo(
         method: _build_policy_lookup(policy_table, column)
         for method, column in policy_columns.items()
     }
+    qcandidate_lookup = _build_qcandidate_lookup(policy_table)
+    action_meta_lookup = _build_action_meta_lookup(env)
     static_prob_map = _build_static_distribution(static_strategy)
 
     summary_records: list[dict[str, object]] = []
@@ -799,6 +1161,8 @@ def run_monte_carlo(
                     initial_state=initial_state,
                     rng=np.random.default_rng(match_seed),
                     static_prob_map=static_prob_map if method_name == "static" else None,
+                    qcandidate_lookup=qcandidate_lookup if method_name == "mdp" else None,
+                    action_meta_lookup=action_meta_lookup if method_name == "mdp" else None,
                 )
                 result.trajectory["match_index"] = match_index
                 result.trajectory["match_seed"] = match_seed
@@ -852,6 +1216,9 @@ def run_monte_carlo(
     policy_difference = build_policy_difference_diagnostics(policy_table)
     recovery_diagnostics = build_recovery_diagnostics(full_trajectory_table, env.recovery_defense_ids)
     condition_metrics = build_condition_performance_metrics(env, full_trajectory_table)
+    process_metrics = build_process_metrics(env, full_trajectory_table)
+    repetition_diagnostics = build_repetition_diagnostics(full_trajectory_table)
+    execution_adjustment = build_execution_adjustment_diagnostics(full_trajectory_table)
 
     if not sample_selection.empty and not full_trajectory_table.empty:
         sample_row = sample_selection[sample_selection["is_plot_sample"]].iloc[0]
@@ -862,8 +1229,15 @@ def run_monte_carlo(
             & (full_trajectory_table["method"].isin(["greedy", "mdp"]))
         ].copy()
         trajectory_sample["is_plot_sample"] = True
+        scenario_rows = sample_selection[sample_selection["is_scenario_representative"]].copy()
+        scenario_samples = full_trajectory_table.merge(
+            scenario_rows[["scenario", "match_index", "match_seed"]],
+            on=["scenario", "match_index", "match_seed"],
+            how="inner",
+        )
     else:
         trajectory_sample = pd.DataFrame()
+        scenario_samples = pd.DataFrame()
 
     return (
         metrics_table,
@@ -873,4 +1247,8 @@ def run_monte_carlo(
         recovery_diagnostics,
         sample_selection,
         condition_metrics,
+        process_metrics,
+        repetition_diagnostics,
+        execution_adjustment,
+        scenario_samples,
     )

@@ -27,7 +27,182 @@ class PolicyArtifacts:
     policy_table: pd.DataFrame
     static_strategy: pd.DataFrame
     scenario_summary: pd.DataFrame
+    qvalue_summary: pd.DataFrame
+    state_reward_decomposition: pd.DataFrame
     value_table: np.ndarray
+
+
+def state_reward_weights(state: MatchState, config) -> dict[str, float]:
+    """根据分差、时间和机能返回状态敏感奖励权重。"""
+
+    weights = {
+        "score_for": 1.00,
+        "score_against": 1.00,
+        "health": 0.20,
+        "cost": 0.20,
+        "fall": 0.67,
+        "prevent": 0.35,
+        "counter": 0.20,
+        "time_control": 0.0,
+        "probe": 0.04,
+        "counter_setup": 0.06,
+    }
+    is_late = state.time_step >= int(config.n_time_steps * 0.75)
+    is_mid_late = state.time_step >= int(config.n_time_steps * 0.50)
+
+    if state.score_diff >= 2 and is_late:
+        weights.update(
+            {
+                "score_for": 0.65,
+                "score_against": 1.45,
+                "cost": 0.35,
+                "fall": 1.10,
+                "prevent": 0.90,
+                "counter": 0.25,
+                "time_control": 0.38,
+                "probe": 0.02,
+                "counter_setup": 0.08,
+            }
+        )
+    elif state.score_diff <= -2 and is_late:
+        weights.update(
+            {
+                "score_for": 1.45,
+                "score_against": 1.05,
+                "health": 0.35,
+                "cost": 0.12,
+                "fall": 0.75,
+                "prevent": 0.20,
+                "counter": 0.45,
+                "probe": 0.00,
+                "counter_setup": 0.04,
+            }
+        )
+    elif state.score_diff == 0 and is_mid_late:
+        weights.update(
+            {
+                "score_for": 1.45,
+                "score_against": 0.98,
+                "fall": 0.78,
+                "prevent": 0.22,
+                "counter": 0.24,
+                "probe": 0.05,
+                "counter_setup": 0.05,
+            }
+        )
+
+    if state.health_my <= 0:
+        weights["cost"] *= 1.35
+        weights["fall"] *= 1.25
+        weights["prevent"] *= 1.20
+    elif state.health_my == 1:
+        weights["cost"] *= 1.12
+        weights["fall"] *= 1.10
+
+    if state.counter_ready > 0:
+        weights["score_for"] *= 1.08
+        weights["counter"] *= 1.35
+        weights["probe"] *= 0.80
+        weights["counter_setup"] *= 1.25
+
+    return weights
+
+
+def state_adjusted_reward(env: Q3Environment, state: MatchState, kernel) -> float:
+    """计算状态敏感即时奖励，用于贪心和 MDP 的一致比较。"""
+
+    return state_reward_breakdown(env, state, kernel)["total_reward"]
+
+
+def state_reward_breakdown(env: Q3Environment, state: MatchState, kernel) -> dict[str, float]:
+    """输出状态-动作层面的唯一主奖励分解。"""
+
+    weights = state_reward_weights(state, env.config)
+    if kernel.action_type == "attack":
+        is_probe_window = (
+            state.time_step <= int(env.config.n_time_steps * 0.35)
+            or (abs(state.score_diff) <= 1 and state.time_step <= int(env.config.n_time_steps * 0.70))
+        )
+        low_risk_value = (
+            max(0.0, 1.0 - float(kernel.p_fall))
+            * max(0.0, 1.0 - float(kernel.p_self_drop))
+            * max(0.0, 1.0 - float(kernel.p_score_against))
+        )
+        probe_term = (
+            weights["probe"] * low_risk_value
+            if kernel.macro_group == "试探攻击" and is_probe_window
+            else 0.0
+        )
+        score_for_term = weights["score_for"] * kernel.p_score_for
+        score_against_term = -weights["score_against"] * kernel.p_score_against
+        health_term = weights["health"] * kernel.p_opp_drop
+        cost_term = -weights["cost"] * kernel.p_self_drop
+        fall_term = -weights["fall"] * kernel.p_fall
+        counter_bonus_term = weights["counter"] * kernel.counter_bonus_term
+        total_reward = (
+            score_for_term
+            + score_against_term
+            + health_term
+            + cost_term
+            + fall_term
+            + counter_bonus_term
+            + probe_term
+        )
+        return {
+            "score_for_term": float(score_for_term),
+            "score_against_term": float(score_against_term),
+            "health_term": float(health_term),
+            "cost_term": float(cost_term),
+            "fall_term": float(fall_term),
+            "counter_bonus_term": float(counter_bonus_term),
+            "probe_term": float(probe_term),
+            "prevent_term": 0.0,
+            "counter_term": 0.0,
+            "counter_setup_term": 0.0,
+            "time_control_term": 0.0,
+            "total_reward": float(total_reward),
+        }
+
+    lead_factor = max(state.score_diff, 0) / max(abs(SCORE_DIFF_VALUES[0]), 1)
+    time_factor = state.time_step / env.config.n_time_steps
+    time_control_term = weights["time_control"] * lead_factor * time_factor
+    counter_term = weights["counter"] * kernel.p_score_for
+    has_counter_followup = bool(str(kernel.preferred_counter_action).strip())
+    counter_setup_base = max(float(kernel.p_score_for), float(kernel.prevented_score_prob))
+    counter_setup_term = (
+        weights["counter_setup"] * counter_setup_base
+        if kernel.macro_group == "反击防守" or has_counter_followup
+        else 0.0
+    )
+    score_against_term = -weights["score_against"] * kernel.p_score_against
+    prevent_term = weights["prevent"] * kernel.prevent_score_term
+    health_term = weights["health"] * kernel.p_opp_drop
+    cost_term = -weights["cost"] * kernel.p_self_drop
+    fall_term = -weights["fall"] * kernel.p_fall
+    total_reward = (
+        counter_term
+        + score_against_term
+        + prevent_term
+        + health_term
+        + time_control_term
+        + counter_setup_term
+        + cost_term
+        + fall_term
+    )
+    return {
+        "score_for_term": 0.0,
+        "score_against_term": float(score_against_term),
+        "health_term": float(health_term),
+        "cost_term": float(cost_term),
+        "fall_term": float(fall_term),
+        "counter_bonus_term": 0.0,
+        "probe_term": 0.0,
+        "prevent_term": float(prevent_term),
+        "counter_term": float(counter_term),
+        "counter_setup_term": float(counter_setup_term),
+        "time_control_term": float(time_control_term),
+        "total_reward": float(total_reward),
+    }
 
 
 def _build_immediate_reward_table(env: Q3Environment) -> pd.DataFrame:
@@ -69,6 +244,11 @@ def _choose_best_action(
     ].copy()
     if subset.empty:
         return "", 0.0
+    if score_column == "state_adjusted_reward":
+        subset["state_adjusted_reward"] = [
+            state_adjusted_reward(env, state, get_kernel(env, state, str(action_id)))
+            for action_id in subset["action_id"]
+        ]
     row = subset.sort_values(
         by=[score_column, "p_score_for", "action_id"],
         ascending=[False, False, True],
@@ -93,6 +273,7 @@ def build_greedy_policy(env: Q3Environment) -> pd.DataFrame:
             env,
             state,
             available_action_ids(env, state.health_my, state.recovery_lock, state.counter_ready),
+            score_column="state_adjusted_reward",
         )
         records.append(
             {
@@ -329,9 +510,45 @@ def build_rule_policy(env: Q3Environment) -> pd.DataFrame:
             {
                 "state_index": int(row["state_index"]),
                 "rule_action_id": action_id,
-                "rule_expected_reward": kernel.expected_reward,
+                "rule_expected_reward": state_adjusted_reward(env, state, kernel),
             }
         )
+    return pd.DataFrame(records)
+
+
+def build_state_reward_decomposition(env: Q3Environment) -> pd.DataFrame:
+    """构建所有可用 state-action 的状态敏感奖励分解表。"""
+
+    records: list[dict[str, object]] = []
+    for _, row in env.state_table.iterrows():
+        state = MatchState(
+            score_diff=int(row["score_diff"]),
+            time_step=int(row["time_step"]),
+            health_my=int(row["health_my"]),
+            health_opp=int(row["health_opp"]),
+            recovery_lock=int(row["recovery_lock"]),
+            counter_ready=int(row["counter_ready"]),
+        )
+        for action_id in available_action_ids(env, state.health_my, state.recovery_lock, state.counter_ready):
+            kernel = get_kernel(env, state, action_id)
+            breakdown = state_reward_breakdown(env, state, kernel)
+            records.append(
+                {
+                    "state_index": int(row["state_index"]),
+                    "score_diff": state.score_diff,
+                    "time_step": state.time_step,
+                    "time_phase": str(row["time_phase"]),
+                    "health_my": state.health_my,
+                    "health_opp": state.health_opp,
+                    "recovery_lock": state.recovery_lock,
+                    "counter_ready": state.counter_ready,
+                    "action_id": kernel.action_id,
+                    "action_name": kernel.action_name,
+                    "action_type": kernel.action_type,
+                    "macro_group": kernel.macro_group,
+                    **breakdown,
+                }
+            )
     return pd.DataFrame(records)
 
 
@@ -373,6 +590,7 @@ def value_iteration(env: Q3Environment) -> tuple[np.ndarray, pd.DataFrame]:
                             best_action = ""
                             best_value = -np.inf
                             best_reward = 0.0
+                            q_records: list[tuple[str, float, float]] = []
 
                             for action_id in available_action_ids(env, health_my, recovery_lock, counter_ready):
                                 kernel = get_kernel(env, state, action_id)
@@ -388,11 +606,18 @@ def value_iteration(env: Q3Environment) -> tuple[np.ndarray, pd.DataFrame]:
                                         next_state.recovery_lock,
                                         next_state.counter_ready,
                                     ]
-                                q_value = kernel.expected_reward + config.gamma * continuation
+                                immediate_reward = state_adjusted_reward(env, state, kernel)
+                                q_value = immediate_reward + config.gamma * continuation
+                                q_records.append((action_id, q_value, immediate_reward))
                                 if q_value > best_value:
                                     best_value = q_value
                                     best_action = action_id
-                                    best_reward = kernel.expected_reward
+                                    best_reward = immediate_reward
+
+                            q_records = sorted(q_records, key=lambda item: (item[1], item[0]), reverse=True)
+                            top_items = q_records[:3]
+                            while len(top_items) < 3:
+                                top_items.append(("", np.nan, np.nan))
 
                             values[value_index, score_index, health_my, health_opp, recovery_lock, counter_ready] = best_value
                             policy_records.append(
@@ -409,6 +634,18 @@ def value_iteration(env: Q3Environment) -> tuple[np.ndarray, pd.DataFrame]:
                                     "mdp_action_id": best_action,
                                     "mdp_value": best_value,
                                     "mdp_immediate_reward": best_reward,
+                                    "top1_action_id": top_items[0][0],
+                                    "top1_q": top_items[0][1],
+                                    "top2_action_id": top_items[1][0],
+                                    "top2_q": top_items[1][1],
+                                    "top3_action_id": top_items[2][0],
+                                    "top3_q": top_items[2][1],
+                                    "q_gap_12": float(top_items[0][1] - top_items[1][1])
+                                    if not np.isnan(top_items[1][1])
+                                    else np.nan,
+                                    "q_gap_23": float(top_items[1][1] - top_items[2][1])
+                                    if not np.isnan(top_items[1][1]) and not np.isnan(top_items[2][1])
+                                    else np.nan,
                                 }
                             )
 
@@ -424,6 +661,7 @@ def build_policy_table(env: Q3Environment) -> PolicyArtifacts:
     static_policy = build_static_policy(env, static_strategy)
     rule_policy = build_rule_policy(env)
     value_table, mdp_policy = value_iteration(env)
+    state_reward_decomposition = build_state_reward_decomposition(env)
 
     policy_table = env.state_table.copy()
     for table in [greedy, static_policy, rule_policy, mdp_policy]:
@@ -445,10 +683,32 @@ def build_policy_table(env: Q3Environment) -> PolicyArtifacts:
         )
 
     scenario_summary = summarize_scenarios(policy_table)
+    qvalue_summary = policy_table[
+        [
+            "state_index",
+            "score_diff",
+            "time_step",
+            "time_phase",
+            "health_my",
+            "health_opp",
+            "recovery_lock",
+            "counter_ready",
+            "top1_action_id",
+            "top1_q",
+            "top2_action_id",
+            "top2_q",
+            "top3_action_id",
+            "top3_q",
+            "q_gap_12",
+            "q_gap_23",
+        ]
+    ].copy()
     return PolicyArtifacts(
         policy_table=policy_table,
         static_strategy=static_strategy,
         scenario_summary=scenario_summary,
+        qvalue_summary=qvalue_summary,
+        state_reward_decomposition=state_reward_decomposition,
         value_table=value_table,
     )
 

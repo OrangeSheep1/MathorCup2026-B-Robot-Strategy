@@ -1,4 +1,9 @@
 ﻿scenario,action_id,action_name,macro_group,count,share,top5_total_count
-领先局,A04,swing_punch,激进攻击,180,1.0,180
-落后局,A04,swing_punch,激进攻击,180,1.0,180
-平局局,A04,swing_punch,激进攻击,45,1.0,45
+领先局,D01,cross_block,保守防守,83,0.46111111111111114,180
+领先局,D15,yield_buffer,平衡恢复,60,0.3333333333333333,180
+领先局,A04,swing_punch,激进攻击,21,0.11666666666666667,180
+领先局,D03,elbow_block,保守防守,16,0.08888888888888889,180
+落后局,A04,swing_punch,激进攻击,172,0.9555555555555556,180
+落后局,D15,yield_buffer,平衡恢复,8,0.044444444444444446,180
+平局局,A04,swing_punch,激进攻击,35,0.7777777777777778,45
+平局局,D15,yield_buffer,平衡恢复,10,0.2222222222222222,45

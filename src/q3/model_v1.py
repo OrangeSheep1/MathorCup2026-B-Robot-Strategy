@@ -125,6 +125,7 @@ REQUIRED_DEFENSE_FEATURE_COLUMNS = [
     "defense_id",
     "defense_name",
     "defense_category",
+    "defense_role",
     "closure_group",
     "exec_time_def",
     "absorb_rate",
@@ -153,6 +154,18 @@ REQUIRED_PAIR_COLUMNS = [
     "counter_window",
     "p_fall",
     "proposed_score",
+    "primary_role_feasible",
+    "fallback_feasible",
+    "ground_feasible",
+    "recovery_feasible",
+    "defense_role",
+    "primary_score",
+    "fallback_score",
+    "counter_prob_effective",
+    "counter_action_id",
+    "counter_action_names",
+    "counter_tau_norm",
+    "pair_audit_flag",
 ]
 
 
@@ -220,6 +233,18 @@ class ActionKernel:
     preferred_counter_action: str
     preferred_counter_name: str
     counter_ready_bonus: float
+    score_term: float = 0.0
+    health_term: float = 0.0
+    cost_term: float = 0.0
+    fall_term: float = 0.0
+    counter_bonus_term: float = 0.0
+    opponent_block_penalty_term: float = 0.0
+    counter_score_term: float = 0.0
+    prevent_score_term: float = 0.0
+    prevented_score_prob: float = 0.0
+    counter_health_term: float = 0.0
+    self_damage_term: float = 0.0
+    time_control_term: float = 0.0
 
 
 @dataclass
@@ -239,7 +264,15 @@ class Q3Environment:
     action_index_map: dict[str, int]
     attack_ids_by_health: dict[int, tuple[str, ...]]
     defense_ids: tuple[str, ...]
+    normal_attack_ids: tuple[str, ...]
+    counter_attack_ids: tuple[str, ...]
+    standing_defense_ids: tuple[str, ...]
+    fallback_defense_ids: tuple[str, ...]
     recovery_defense_ids: tuple[str, ...]
+    opponent_defense_profile: pd.DataFrame
+    opponent_attack_profile: pd.DataFrame
+    input_audit: pd.DataFrame
+    q2_interface_audit: pd.DataFrame
 
 
 def _require_columns(data: pd.DataFrame, required: list[str], label: str) -> None:
@@ -255,6 +288,8 @@ def load_action_features(file_path: str | Path) -> pd.DataFrame:
 
     data = pd.read_csv(file_path)
     _require_columns(data, REQUIRED_ACTION_COLUMNS, "Q1 动作特征表")
+    if "fall_penalty_raw" not in data.columns and "fall_penalty" not in data.columns:
+        raise ValueError("Q1 动作特征表缺少 fall_penalty_raw 或 fall_penalty，Q3 不能安全估计攻击倒地风险。")
     return data.copy()
 
 
@@ -470,7 +505,10 @@ def _classify_defense_macro_group(row: pd.Series) -> str:
     """将防守动作归为宏观策略类。"""
 
     category = str(row["defense_category"])
-    if category in {"evade", "combo"} and float(row["avg_counter_window"]) >= 0.20:
+    if category in {"evade", "combo"} and (
+        float(row["avg_counter_window"]) >= 0.08
+        or float(row["avg_counter_score"]) >= 0.01
+    ):
         return "反击防守"
     if category in {"balance", "ground"}:
         return "平衡恢复"
@@ -493,8 +531,6 @@ def build_attack_table(
         attacks["attack_fall_risk"] = _normalize_series(attacks["fall_penalty_raw"]).clip(0.0, 1.0)
     elif "fall_penalty" in attacks.columns:
         attacks["attack_fall_risk"] = _normalize_series(attacks["fall_penalty"]).clip(0.0, 1.0)
-    else:
-        attacks["attack_fall_risk"] = 0.0
 
     pair_summary = (
         pair_scores.groupby("action_id", as_index=False)
@@ -516,6 +552,12 @@ def build_attack_table(
     attacks["energy_drop_high"] = (attacks["energy_cost_j"] / config.high_health_threshold_j).clip(0.0, 1.0)
     attacks["energy_drop_mid"] = (attacks["energy_cost_j"] / config.mid_health_gap_j).clip(0.0, 1.0)
     attacks["low_health_available"] = attacks["energy_norm"] < config.low_health_energy_cutoff
+    conditional_flag = attacks.get("conditional_flag", pd.Series(False, index=attacks.index)).astype(str).str.lower()
+    trigger_state = attacks.get("trigger_state", pd.Series("", index=attacks.index)).astype(str).str.lower()
+    attacks["is_conditional_attack"] = (
+        conditional_flag.isin(["true", "1", "yes", "y"])
+        | trigger_state.str.contains("fall|ground|recover", regex=True, na=False)
+    )
     attacks["macro_group"] = attacks.apply(_classify_attack_macro_group, axis=1)
     return attacks.sort_values(by="action_id").reset_index(drop=True)
 
@@ -560,6 +602,81 @@ def _pick_counter_action(counter_window: float, attack_table: pd.DataFrame) -> t
     )
 
 
+def build_input_audit(
+    action_feature_file: str | Path,
+    defense_matchup_file: str | Path,
+    defense_feature_file: str | Path,
+    defense_pair_file: str | Path,
+    action_features: pd.DataFrame,
+    defense_matchup: pd.DataFrame,
+    defense_features: pd.DataFrame,
+    pair_scores: pd.DataFrame,
+    config: Q3Config,
+) -> pd.DataFrame:
+    """构建 Q3 输入审计表，确保 Q1/Q2 接口被正确刷新。"""
+
+    specs = [
+        ("action_features", Path(action_feature_file), action_features),
+        ("defense_matchup", Path(defense_matchup_file), defense_matchup),
+        ("defense_features", Path(defense_feature_file), defense_features),
+        ("defense_pair_scores", Path(defense_pair_file), pair_scores),
+    ]
+    records: list[dict[str, object]] = []
+    for name, path, frame in specs:
+        stat = path.stat() if path.exists() else None
+        records.append(
+            {
+                "input_name": name,
+                "file_path": str(path),
+                "row_count": int(len(frame)),
+                "column_count": int(len(frame.columns)),
+                "last_write_time": "" if stat is None else pd.Timestamp(stat.st_mtime, unit="s").isoformat(),
+                "unique_attack_count": int(frame["action_id"].nunique()) if "action_id" in frame.columns else 0,
+                "unique_defense_count": int(frame["defense_id"].nunique()) if "defense_id" in frame.columns else 0,
+                "has_primary_role_feasible": "primary_role_feasible" in frame.columns,
+                "has_defense_role": "defense_role" in frame.columns,
+                "has_pair_audit_flag": "pair_audit_flag" in frame.columns,
+                "missing_value_count": int(frame.isna().sum().sum()),
+                "energy_unit_required": config.energy_unit_required,
+                "energy_max": float(pd.to_numeric(action_features["energy_cost"], errors="coerce").max()),
+                "energy_p90": float(pd.to_numeric(action_features["energy_cost"], errors="coerce").quantile(0.90)),
+                "pair_primary_feasible_count": int(pair_scores["primary_role_feasible"].sum())
+                if "primary_role_feasible" in pair_scores.columns
+                else 0,
+                "pair_fallback_feasible_count": int(pair_scores["fallback_feasible"].sum())
+                if "fallback_feasible" in pair_scores.columns
+                else 0,
+            }
+        )
+
+    energy = pd.to_numeric(action_features["energy_cost"], errors="coerce")
+    records.append(
+        {
+            "input_name": "semantic_checks",
+            "file_path": "",
+            "row_count": 0,
+            "column_count": 0,
+            "last_write_time": "",
+            "unique_attack_count": int(action_features["action_id"].nunique()),
+            "unique_defense_count": int(defense_features["defense_id"].nunique()),
+            "has_primary_role_feasible": "primary_role_feasible" in pair_scores.columns,
+            "has_defense_role": "defense_role" in pair_scores.columns,
+            "has_pair_audit_flag": "pair_audit_flag" in pair_scores.columns,
+            "missing_value_count": 0,
+            "energy_unit_required": config.energy_unit_required,
+            "energy_max": float(energy.max()),
+            "energy_p90": float(energy.quantile(0.90)),
+            "pair_primary_feasible_count": int(pair_scores["primary_role_feasible"].sum()),
+            "pair_fallback_feasible_count": int(pair_scores["fallback_feasible"].sum()),
+            "attack_count_ok": action_features["action_id"].nunique() == 13,
+            "defense_count_ok": defense_features["defense_id"].nunique() == 22,
+            "pair_coverage_ok": len(pair_scores) == 13 * 22,
+            "energy_joule_like": bool(energy.max() > 5.0 and energy.max() <= config.available_match_energy_j * 1.10),
+        }
+    )
+    return pd.DataFrame(records)
+
+
 def build_pair_table(pair_scores: pd.DataFrame, attack_table: pd.DataFrame) -> pd.DataFrame:
     """补充 Q3 使用的攻防对派生字段。"""
 
@@ -571,11 +688,25 @@ def build_pair_table(pair_scores: pd.DataFrame, attack_table: pd.DataFrame) -> p
     effective_counter_probs: list[float] = []
 
     for _, row in pair_table.iterrows():
-        counter_id, counter_name, counter_success, counter_tau_norm = _pick_counter_action(
-            float(row["counter_window"]),
-            attack_table,
-        )
-        effective_counter = float(row["p_block"]) * counter_success if counter_id else 0.0
+        raw_counter_id = str(row.get("counter_action_id", "")).strip()
+        raw_counter_name = str(row.get("counter_action_name", "")).strip()
+        if raw_counter_id and raw_counter_id.lower() != "nan":
+            counter_id = raw_counter_id
+            counter_name = raw_counter_name
+            if not counter_name or counter_name.lower() == "nan":
+                counter_name = str(row.get("counter_action_names", "")).split("|")[0].strip()
+            counter_success = _safe_float(row.get("counter_prob_effective", row.get("counter_prob", 0.0)))
+            counter_tau_norm = _safe_float(row.get("counter_tau_norm", 0.0))
+            if counter_tau_norm <= 0.0 and counter_id in set(attack_table["action_id"]):
+                counter_tau_norm = float(attack_table.loc[attack_table["action_id"] == counter_id, "tau_norm"].iloc[0])
+        else:
+            counter_id, counter_name, counter_success, counter_tau_norm = _pick_counter_action(
+                float(row["counter_window"]),
+                attack_table,
+            )
+        effective_counter = _safe_float(row.get("counter_prob_effective", 0.0))
+        if effective_counter <= 0.0:
+            effective_counter = float(row["p_block"]) * counter_success if counter_id else 0.0
         counter_ids.append(counter_id)
         counter_names.append(counter_name)
         counter_success_probs.append(effective_counter)
@@ -626,77 +757,128 @@ def build_counter_attack_profile(pair_table: pd.DataFrame, attack_table: pd.Data
     return profile[["action_id", "counter_role_score", "counter_ready_bonus", "counter_attack_eligible"]]
 
 
-def build_attack_response_profile(defense_matchup: pd.DataFrame) -> pd.DataFrame:
-    """根据 Q2 的 Top3 防守集构建攻击响应画像。"""
+def build_opponent_defense_profile(
+    pair_table: pd.DataFrame,
+    top_k: int = 5,
+    temperature: float = 0.08,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """从 Q2 pair-level 主防守池构造对手防守画像。"""
 
+    profile_records: list[dict[str, object]] = []
     response_records: list[dict[str, object]] = []
-    for _, row in defense_matchup.iterrows():
-        candidates: list[dict[str, float | str]] = []
-        defense_scores: list[float] = []
-        for rank in (1, 2, 3):
-            defense_id = str(row.get(f"defense_id_r{rank}", "")).strip()
-            if not defense_id or defense_id.lower() == "nan":
-                continue
-            defense_score = _safe_float(row.get(f"defense_score_r{rank}", 0.0))
-            defense_scores.append(defense_score)
-            candidates.append(
-                {
-                    "defense_id": defense_id,
-                    "block_prob": _safe_float(row.get(f"block_prob_r{rank}", 0.0)),
-                    "counter_prob": _safe_float(row.get(f"counter_prob_r{rank}", 0.0)),
-                    "counter_window": _safe_float(row.get(f"counter_window_r{rank}", 0.0)),
-                    "fall_risk": _safe_float(row.get(f"fall_risk_r{rank}", 0.0)),
-                    "defense_score": defense_score,
-                }
-            )
-
-        weights = _normalize_positive_weights(defense_scores)
-        if not candidates:
+    for action_id, group in pair_table.groupby("action_id", sort=False):
+        active_pool = group[group["primary_role_feasible"].astype(bool)].copy()
+        active_pool = active_pool.sort_values(
+            by=["primary_score", "p_block", "p_fall", "counter_window"],
+            ascending=[False, False, True, False],
+        ).head(top_k)
+        if active_pool.empty:
             response_records.append(
                 {
-                    "action_id": str(row["action_id"]),
+                    "action_id": str(action_id),
                     "opponent_block_rate": 0.0,
                     "opponent_counter_prob": 0.0,
                     "opponent_counter_window": 0.0,
                     "opponent_defense_fall_risk": 0.0,
-                    "opp_defense_id_r1": "",
-                    "opp_defense_id_r2": "",
-                    "opp_defense_id_r3": "",
-                    "opp_defense_weight_r1": 0.0,
-                    "opp_defense_weight_r2": 0.0,
-                    "opp_defense_weight_r3": 0.0,
+                    **{f"opp_defense_id_r{rank}": "" for rank in (1, 2, 3)},
+                    **{f"opp_defense_weight_r{rank}": 0.0 for rank in (1, 2, 3)},
                 }
             )
             continue
 
-        weighted_block = 0.0
-        weighted_counter = 0.0
-        weighted_window = 0.0
-        weighted_fall = 0.0
-        record: dict[str, object] = {
-            "action_id": str(row["action_id"]),
-        }
+        scores = active_pool["primary_score"].astype(float).to_numpy()
+        shifted = scores - float(scores.max())
+        weights = np.exp(shifted / max(float(temperature), 1e-6))
+        if np.isclose(float(weights.sum()), 0.0):
+            weights = np.full(len(active_pool), 1.0 / len(active_pool))
+        else:
+            weights = weights / weights.sum()
+        active_pool = active_pool.reset_index(drop=True)
+        active_pool["profile_weight"] = weights
+
+        response: dict[str, object] = {"action_id": str(action_id)}
+        response["opponent_block_rate"] = float((active_pool["p_block"] * active_pool["profile_weight"]).sum())
+        response["opponent_counter_prob"] = float((active_pool["counter_prob_effective"] * active_pool["profile_weight"]).sum())
+        response["opponent_counter_window"] = float((active_pool["counter_window"] * active_pool["profile_weight"]).sum())
+        response["opponent_defense_fall_risk"] = float((active_pool["p_fall"] * active_pool["profile_weight"]).sum())
         for rank in (1, 2, 3):
-            if rank <= len(candidates):
-                candidate = candidates[rank - 1]
-                weight = weights[rank - 1]
-                record[f"opp_defense_id_r{rank}"] = str(candidate["defense_id"])
-                record[f"opp_defense_weight_r{rank}"] = float(weight)
-                weighted_block += weight * float(candidate["block_prob"])
-                weighted_counter += weight * float(candidate["counter_prob"])
-                weighted_window += weight * float(candidate["counter_window"])
-                weighted_fall += weight * float(candidate["fall_risk"])
+            if rank <= len(active_pool):
+                picked = active_pool.iloc[rank - 1]
+                response[f"opp_defense_id_r{rank}"] = str(picked["defense_id"])
+                response[f"opp_defense_weight_r{rank}"] = float(picked["profile_weight"])
             else:
-                record[f"opp_defense_id_r{rank}"] = ""
-                record[f"opp_defense_weight_r{rank}"] = 0.0
+                response[f"opp_defense_id_r{rank}"] = ""
+                response[f"opp_defense_weight_r{rank}"] = 0.0
 
-        record["opponent_block_rate"] = weighted_block
-        record["opponent_counter_prob"] = weighted_counter
-        record["opponent_counter_window"] = weighted_window
-        record["opponent_defense_fall_risk"] = weighted_fall
-        response_records.append(record)
+        for _, row in active_pool.iterrows():
+            profile_records.append(
+                {
+                    "action_id": str(action_id),
+                    "defense_id": str(row["defense_id"]),
+                    "defense_category": str(row["defense_category"]),
+                    "defense_role": str(row.get("defense_role", "")),
+                    "primary_score": float(row["primary_score"]),
+                    "p_block": float(row["p_block"]),
+                    "counter_prob_effective": float(row["counter_prob_effective"]),
+                    "counter_window": float(row["counter_window"]),
+                    "p_fall": float(row["p_fall"]),
+                    "profile_weight": float(row["profile_weight"]),
+                }
+            )
+        response_records.append(response)
 
-    return pd.DataFrame(response_records)
+    return pd.DataFrame(response_records), pd.DataFrame(profile_records)
+
+
+def build_q2_interface_audit(pair_table: pd.DataFrame, opponent_defense_profile: pd.DataFrame) -> pd.DataFrame:
+    """审计 Q3 对 Q2 主防守层和保底层的使用口径。"""
+
+    records: list[dict[str, object]] = []
+    for action_id, group in pair_table.groupby("action_id", sort=False):
+        active_pool = group[group["primary_role_feasible"].astype(bool)].copy()
+        fallback_pool = group[group["fallback_feasible"].astype(bool)].copy()
+        active_top = active_pool.sort_values(by="primary_score", ascending=False).head(3)
+        fallback_top = fallback_pool.sort_values(by="fallback_score", ascending=False).head(3)
+        profile = opponent_defense_profile[opponent_defense_profile["action_id"] == action_id]
+        records.append(
+            {
+                "scope": "by_attack",
+                "action_id": str(action_id),
+                "primary_pair_count": int(len(active_pool)),
+                "fallback_pair_count": int(len(fallback_pool)),
+                "active_pool_empty": bool(active_pool.empty),
+                "active_top3": "|".join(active_top["defense_id"].astype(str).tolist()),
+                "fallback_top3": "|".join(fallback_top["defense_id"].astype(str).tolist()),
+                "profile_weight_sum": float(profile["profile_weight"].sum()) if not profile.empty else 0.0,
+                "profile_weight_normalized": bool(
+                    not profile.empty and math.isclose(float(profile["profile_weight"].sum()), 1.0, rel_tol=1e-6)
+                ),
+            }
+        )
+
+    layer_counts = (
+        pair_table.groupby(["defense_id", "defense_role"], as_index=False)
+        .agg(
+            primary_feasible_count=("primary_role_feasible", "sum"),
+            fallback_feasible_count=("fallback_feasible", "sum"),
+            ground_feasible_count=("ground_feasible", "sum"),
+            recovery_feasible_count=("recovery_feasible", "sum"),
+        )
+    )
+    for _, row in layer_counts.iterrows():
+        records.append(
+            {
+                "scope": "by_defense",
+                "action_id": "",
+                "defense_id": str(row["defense_id"]),
+                "defense_role": str(row["defense_role"]),
+                "primary_pair_count": int(row["primary_feasible_count"]),
+                "fallback_pair_count": int(row["fallback_feasible_count"]),
+                "ground_pair_count": int(row["ground_feasible_count"]),
+                "recovery_pair_count": int(row["recovery_feasible_count"]),
+            }
+        )
+    return pd.DataFrame(records)
 
 
 def build_defense_table(defense_features: pd.DataFrame, pair_table: pd.DataFrame) -> pd.DataFrame:
@@ -722,7 +904,64 @@ def build_defense_table(defense_features: pd.DataFrame, pair_table: pd.DataFrame
     defenses["avg_score"] = defenses["avg_score"].fillna(0.0)
     defenses["avg_counter_score"] = defenses["avg_counter_score"].fillna(0.0)
     defenses["macro_group"] = defenses.apply(_classify_defense_macro_group, axis=1)
+    defenses["is_standing_defense"] = (
+        defenses["closure_group"].eq("active")
+        | defenses["defense_category"].isin(["block", "evade", "posture", "combo"])
+    )
+    defenses["is_fallback_defense"] = defenses["closure_group"].eq("fallback")
+    defenses["is_recovery_defense"] = (
+        defenses["defense_category"].isin(["balance", "ground"])
+        | defenses["defense_role"].isin(["recovery_only", "ground_only", "emergency_transition"])
+    )
+    defenses["is_counter_defense"] = (
+        defenses["macro_group"].eq("反击防守")
+        | defenses["defense_category"].isin(["evade", "combo"])
+    )
     return defenses
+
+
+def build_opponent_attack_profile(attack_table: pd.DataFrame, config: Q3Config) -> pd.DataFrame:
+    """构造按对手机能分层的对手攻击分布。"""
+
+    records: list[dict[str, object]] = []
+    for health_opp in HEALTH_LEVELS:
+        available_ids = available_attack_ids(attack_table, health_opp, config)
+        subset = attack_table[attack_table["action_id"].isin(available_ids)].copy()
+        if "is_conditional_attack" in subset.columns:
+            subset = subset[~subset["is_conditional_attack"].astype(bool)].copy()
+        if subset.empty:
+            continue
+        raw_weight = (
+            0.45 * subset["attack_utility"].astype(float)
+            + 0.35 * subset["score_success_response"].astype(float)
+            + 0.20 * subset["tau_norm"].astype(float)
+        )
+        if health_opp <= 0:
+            raw_weight = raw_weight * (1.0 - 0.45 * subset["energy_norm"].astype(float)).clip(0.10, 1.0)
+        elif health_opp == 1:
+            raw_weight = raw_weight * (1.0 - 0.20 * subset["energy_norm"].astype(float)).clip(0.20, 1.0)
+        weights = np.clip(raw_weight.to_numpy(dtype=float), 0.0, None)
+        if np.isclose(float(weights.sum()), 0.0):
+            weights = np.full(len(subset), 1.0 / len(subset))
+        else:
+            weights = weights / weights.sum()
+        subset = subset.reset_index(drop=True)
+        for index, row in subset.iterrows():
+            records.append(
+                {
+                    "health_opp": health_opp,
+                    "health_opp_name": HEALTH_LABELS[health_opp],
+                    "action_id": str(row["action_id"]),
+                    "action_name": str(row["action_name"]),
+                    "macro_group": str(row["macro_group"]),
+                    "attack_utility": float(row["attack_utility"]),
+                    "score_success_response": float(row["score_success_response"]),
+                    "tau_norm": float(row["tau_norm"]),
+                    "energy_norm": float(row["energy_norm"]),
+                    "attack_weight": float(weights[index]),
+                }
+            )
+    return pd.DataFrame(records)
 
 
 def build_action_space(attack_table: pd.DataFrame, defense_table: pd.DataFrame) -> pd.DataFrame:
@@ -774,10 +1013,17 @@ def build_action_space(attack_table: pd.DataFrame, defense_table: pd.DataFrame) 
 def available_attack_ids(attack_table: pd.DataFrame, health_level: int, config: Q3Config) -> tuple[str, ...]:
     """返回给定机能状态下可用的攻击动作。"""
 
+    base_mask = ~attack_table.get("is_conditional_attack", pd.Series(False, index=attack_table.index)).astype(bool)
     if health_level <= 0:
-        subset = attack_table[attack_table["low_health_available"]].copy()
+        subset = attack_table[
+            base_mask
+            &
+            attack_table["low_health_available"]
+            & (attack_table["attack_fall_risk"] <= 0.35)
+            & (attack_table["exec_time"] <= 1.25)
+        ].copy()
     else:
-        subset = attack_table.copy()
+        subset = attack_table[base_mask].copy()
     return tuple(subset.sort_values("action_id")["action_id"].tolist())
 
 
@@ -791,8 +1037,19 @@ def available_action_ids(
 
     if recovery_lock > 0:
         return env.recovery_defense_ids
-    attack_ids = env.attack_ids_by_health[health_level]
-    return attack_ids + env.defense_ids
+    attack_ids = tuple(action_id for action_id in env.attack_ids_by_health[health_level] if action_id in env.normal_attack_ids)
+    if counter_ready > 0:
+        counter_pool = tuple(action_id for action_id in env.counter_attack_ids if action_id in attack_ids)
+        normal_pool = tuple(action_id for action_id in attack_ids if action_id not in counter_pool)
+        counter_defenses = tuple(
+            defense_id
+            for defense_id in env.standing_defense_ids
+            if defense_id in set(env.defense_table.loc[env.defense_table["is_counter_defense"].astype(bool), "defense_id"])
+        )
+        return tuple(dict.fromkeys(counter_pool + normal_pool + counter_defenses + env.standing_defense_ids))
+    if health_level <= 0:
+        return attack_ids + env.fallback_defense_ids + env.standing_defense_ids
+    return attack_ids + env.standing_defense_ids
 
 
 def _health_drop_from_energy(attack_row: pd.Series, health_my: int) -> float:
@@ -821,6 +1078,10 @@ def _build_attack_kernel(
     if counter_ready > 0:
         counter_ready_bonus = float(attack_row.get("counter_ready_bonus", config.counter_ready_bonus_other))
         p_score_for = p_score_for * (1.0 + counter_ready_bonus)
+    if health_my == 1 and str(attack_row["macro_group"]) == "激进攻击":
+        p_score_for *= 0.90
+    elif health_my <= 0 and str(attack_row["macro_group"]) == "激进攻击":
+        p_score_for *= 0.70
     total_score_prob = p_score_for + p_score_against
     if total_score_prob > 1.0:
         p_score_for = p_score_for / total_score_prob
@@ -832,12 +1093,15 @@ def _build_attack_kernel(
         p_score_for * float(attack_row["tau_norm"]) * config.impact_to_health_factor,
     )
     p_fall = float(attack_row["attack_fall_risk"])
-    expected_reward = (
-        config.reward_score * (p_score_for - p_score_against)
-        + config.reward_health * p_opp_drop
-        - config.reward_cost * p_self_drop
-        - config.reward_fall * p_fall
+    score_term = config.reward_score * p_score_for
+    health_term = config.reward_health * p_opp_drop
+    cost_term = config.reward_cost * p_self_drop
+    fall_term = config.reward_fall * p_fall
+    counter_bonus_term = config.reward_score * max(p_score_for - float(attack_row["score_success_response"]), 0.0)
+    opponent_block_penalty_term = config.reward_score * (
+        float(attack_row["score_prob"]) * opponent_block_rate + p_score_against
     )
+    expected_reward = score_term + health_term - cost_term - fall_term - opponent_block_penalty_term
     return ActionKernel(
         action_id=str(attack_row["action_id"]),
         action_name=str(attack_row["action_name"]),
@@ -854,6 +1118,12 @@ def _build_attack_kernel(
         preferred_counter_action="",
         preferred_counter_name="",
         counter_ready_bonus=float(counter_ready_bonus),
+        score_term=float(score_term),
+        health_term=float(health_term),
+        cost_term=float(cost_term),
+        fall_term=float(fall_term),
+        counter_bonus_term=float(counter_bonus_term),
+        opponent_block_penalty_term=float(opponent_block_penalty_term),
     )
 
 
@@ -864,6 +1134,7 @@ def _build_defense_kernel(
     health_opp: int,
     config: Q3Config,
     opponent_attack_ids: tuple[str, ...],
+    opponent_attack_profile: pd.DataFrame,
 ) -> ActionKernel:
     """构建防守动作在给定机能状态下的一步核。"""
 
@@ -877,18 +1148,33 @@ def _build_defense_kernel(
         p_self_drop = 0.0
         p_opp_drop = 0.0
         p_fall = 0.0
+        prevented_score_prob = 0.0
         preferred_counter_action = ""
         preferred_counter_name = ""
     else:
+        profile = opponent_attack_profile[
+            (opponent_attack_profile["health_opp"] == health_opp)
+            & (opponent_attack_profile["action_id"].isin(subset["action_id"]))
+        ][["action_id", "attack_weight"]].copy()
+        subset = subset.merge(profile, on="action_id", how="left")
+        subset["attack_weight"] = subset["attack_weight"].fillna(0.0)
+        weights = subset["attack_weight"].to_numpy(dtype=float)
+        if np.isclose(float(weights.sum()), 0.0):
+            weights = np.full(len(subset), 1.0 / len(subset))
+        else:
+            weights = weights / weights.sum()
+        subset["kernel_weight"] = weights
         subset["opponent_score_prob"] = subset["score_prob"] * (1.0 - subset["p_block"])
+        subset["prevented_score_prob"] = subset["score_prob"] * subset["p_block"]
         subset["counter_health_drop"] = (
             subset["counter_prob_effective"] * subset["counter_tau_norm"] * config.impact_to_health_factor
         )
-        p_score_for = float(subset["counter_prob_effective"].mean())
-        p_score_against = float(subset["opponent_score_prob"].mean())
-        p_self_drop = 0.0 if health_my <= 0 else float(subset["defense_damage"].mean().clip(0.0, 1.0))
-        p_opp_drop = 0.0 if health_opp <= 0 else float(subset["counter_health_drop"].mean().clip(0.0, 1.0))
-        p_fall = float(subset["p_fall"].mean().clip(0.0, 1.0))
+        p_score_for = float((subset["counter_prob_effective"] * subset["kernel_weight"]).sum())
+        p_score_against = float((subset["opponent_score_prob"] * subset["kernel_weight"]).sum())
+        prevented_score_prob = float((subset["prevented_score_prob"] * subset["kernel_weight"]).sum())
+        p_self_drop = 0.0 if health_my <= 0 else float((subset["defense_damage"] * subset["kernel_weight"]).sum())
+        p_opp_drop = 0.0 if health_opp <= 0 else float((subset["counter_health_drop"] * subset["kernel_weight"]).sum())
+        p_fall = float((subset["p_fall"] * subset["kernel_weight"]).sum())
         ranked = subset.sort_values(
             by=["counter_prob_effective", "counter_window", "proposed_score"],
             ascending=[False, False, False],
@@ -901,12 +1187,20 @@ def _build_defense_kernel(
         p_score_for = p_score_for / total_score_prob
         p_score_against = p_score_against / total_score_prob
 
-    expected_reward = (
-        config.reward_score * (p_score_for - p_score_against)
-        + config.reward_health * p_opp_drop
-        - config.reward_cost * p_self_drop
-        - config.reward_fall * p_fall
-    )
+    counter_score_term = config.reward_score * p_score_for
+    prevent_score_term = config.reward_score * max(0.0, float(defense_row["avg_block_rate"]) - p_score_against)
+    counter_health_term = config.reward_health * p_opp_drop
+    self_damage_term = config.reward_cost * p_self_drop
+    fall_term = config.reward_fall * p_fall
+    if health_my <= 0:
+        if str(defense_row["macro_group"]) in {"保守防守", "平衡恢复"}:
+            prevent_score_term *= 1.10
+        elif str(defense_row["macro_group"]) == "反击防守":
+            counter_score_term *= 0.85
+            counter_health_term *= 0.85
+    elif health_my == 1 and str(defense_row["macro_group"]) == "反击防守":
+        counter_score_term *= 0.95
+    expected_reward = counter_score_term + prevent_score_term + counter_health_term - self_damage_term - fall_term
     return ActionKernel(
         action_id=str(defense_row["defense_id"]),
         action_name=str(defense_row["defense_name"]),
@@ -923,6 +1217,12 @@ def _build_defense_kernel(
         preferred_counter_action=preferred_counter_action,
         preferred_counter_name=preferred_counter_name,
         counter_ready_bonus=0.0,
+        counter_score_term=float(counter_score_term),
+        prevent_score_term=float(prevent_score_term),
+        prevented_score_prob=float(prevented_score_prob),
+        counter_health_term=float(counter_health_term),
+        self_damage_term=float(self_damage_term),
+        fall_term=float(fall_term),
     )
 
 
@@ -930,6 +1230,7 @@ def build_kernel_table(
     attack_table: pd.DataFrame,
     defense_table: pd.DataFrame,
     pair_table: pd.DataFrame,
+    opponent_attack_profile: pd.DataFrame,
     config: Q3Config,
 ) -> tuple[pd.DataFrame, dict[tuple[int, int, int, str], ActionKernel], dict[int, tuple[str, ...]]]:
     """为全部机能状态预计算动作核。"""
@@ -972,6 +1273,18 @@ def build_kernel_table(
                             "preferred_counter_action": kernel.preferred_counter_action,
                             "preferred_counter_name": kernel.preferred_counter_name,
                             "counter_ready_bonus": kernel.counter_ready_bonus,
+                            "score_term": kernel.score_term,
+                            "health_term": kernel.health_term,
+                            "cost_term": kernel.cost_term,
+                            "fall_term": kernel.fall_term,
+                            "counter_bonus_term": kernel.counter_bonus_term,
+                            "opponent_block_penalty_term": kernel.opponent_block_penalty_term,
+                            "counter_score_term": kernel.counter_score_term,
+                            "prevent_score_term": kernel.prevent_score_term,
+                            "prevented_score_prob": kernel.prevented_score_prob,
+                            "counter_health_term": kernel.counter_health_term,
+                            "self_damage_term": kernel.self_damage_term,
+                            "time_control_term": kernel.time_control_term,
                         }
                     )
 
@@ -983,6 +1296,7 @@ def build_kernel_table(
                         health_opp,
                         config,
                         opponent_attack_ids,
+                        opponent_attack_profile,
                     )
                     kernel_lookup[(health_my, health_opp, counter_ready, kernel.action_id)] = kernel
                     kernel_records.append(
@@ -1006,6 +1320,18 @@ def build_kernel_table(
                             "preferred_counter_action": kernel.preferred_counter_action,
                             "preferred_counter_name": kernel.preferred_counter_name,
                             "counter_ready_bonus": kernel.counter_ready_bonus,
+                            "score_term": kernel.score_term,
+                            "health_term": kernel.health_term,
+                            "cost_term": kernel.cost_term,
+                            "fall_term": kernel.fall_term,
+                            "counter_bonus_term": kernel.counter_bonus_term,
+                            "opponent_block_penalty_term": kernel.opponent_block_penalty_term,
+                            "counter_score_term": kernel.counter_score_term,
+                            "prevent_score_term": kernel.prevent_score_term,
+                            "prevented_score_prob": kernel.prevented_score_prob,
+                            "counter_health_term": kernel.counter_health_term,
+                            "self_damage_term": kernel.self_damage_term,
+                            "time_control_term": kernel.time_control_term,
                         }
                     )
 
@@ -1040,11 +1366,23 @@ def build_environment(
     defense_matchup = load_defense_matchup(defense_matchup_file)
     defense_features = load_defense_features(defense_feature_file)
     pair_scores = load_defense_pair_scores(defense_pair_file)
+    input_audit = build_input_audit(
+        action_feature_file,
+        defense_matchup_file,
+        defense_feature_file,
+        defense_pair_file,
+        action_features,
+        defense_matchup,
+        defense_features,
+        pair_scores,
+        config,
+    )
 
     attack_table = build_attack_table(action_features, pair_scores, config)
     pair_table = build_pair_table(pair_scores, attack_table)
     counter_profile = build_counter_attack_profile(pair_table, attack_table, config)
-    attack_response = build_attack_response_profile(defense_matchup)
+    attack_response, opponent_defense_profile = build_opponent_defense_profile(pair_table)
+    q2_interface_audit = build_q2_interface_audit(pair_table, opponent_defense_profile)
     attack_table = attack_table.merge(attack_response, on="action_id", how="left")
     attack_table = attack_table.merge(counter_profile, on="action_id", how="left")
     attack_table["opponent_block_rate"] = attack_table["opponent_block_rate"].fillna(attack_table["avg_block_rate"])
@@ -1061,12 +1399,14 @@ def build_environment(
         attack_table[f"opp_defense_weight_r{rank}"] = attack_table[f"opp_defense_weight_r{rank}"].fillna(0.0)
 
     defense_table = build_defense_table(defense_features, pair_table)
+    opponent_attack_profile = build_opponent_attack_profile(attack_table, config)
     action_table = build_action_space(attack_table, defense_table)
     state_table = build_state_table(config)
     kernel_table, kernel_lookup, attack_ids_by_health = build_kernel_table(
         attack_table,
         defense_table,
         pair_table,
+        opponent_attack_profile,
         config,
     )
     pair_lookup = pair_table.set_index(["action_id", "defense_id"]).sort_index()
@@ -1075,6 +1415,26 @@ def build_environment(
         for index, action_id in enumerate(action_table["action_id"].tolist())
     }
     defense_ids = tuple(defense_table["defense_id"].tolist())
+    normal_attack_ids = tuple(
+        attack_table[~attack_table["is_conditional_attack"].astype(bool)]
+        .sort_values(by="action_id")["action_id"]
+        .tolist()
+    )
+    counter_attack_ids = tuple(
+        attack_table[attack_table["counter_attack_eligible"].astype(bool)]
+        .sort_values(by=["counter_role_score", "action_id"], ascending=[False, True])["action_id"]
+        .tolist()
+    )
+    standing_defense_ids = tuple(
+        defense_table[defense_table["is_standing_defense"].astype(bool)]
+        .sort_values(by="defense_id")["defense_id"]
+        .tolist()
+    )
+    fallback_defense_ids = tuple(
+        defense_table[defense_table["is_fallback_defense"].astype(bool)]
+        .sort_values(by="defense_id")["defense_id"]
+        .tolist()
+    )
     recovery_defense_ids = _select_recovery_defense_ids(defense_table)
     return Q3Environment(
         config=config,
@@ -1090,7 +1450,15 @@ def build_environment(
         action_index_map=action_index_map,
         attack_ids_by_health=attack_ids_by_health,
         defense_ids=defense_ids,
+        normal_attack_ids=normal_attack_ids,
+        counter_attack_ids=counter_attack_ids,
+        standing_defense_ids=standing_defense_ids,
+        fallback_defense_ids=fallback_defense_ids,
         recovery_defense_ids=recovery_defense_ids,
+        opponent_defense_profile=opponent_defense_profile,
+        opponent_attack_profile=opponent_attack_profile,
+        input_audit=input_audit,
+        q2_interface_audit=q2_interface_audit,
     )
 
 
