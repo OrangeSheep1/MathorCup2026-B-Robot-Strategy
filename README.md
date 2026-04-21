@@ -189,9 +189,3 @@ Q4 综合表现指数：
 - Q4 零资源基线经过 Q3 结果校准，保证第四问没有脱离前三问。
 - Q4 综合指数是为展示“胜率、领先稳定性、平局突破能力、落后韧性”的综合表现而构造的论文指标，不应替代原始胜率。
 
-## 发布版注意事项
-
-- `data/raw/`、`data/interim/`、`data/output/` 均为正式结果链的一部分，不建议删除。
-- `data/interim/q4_pwin_table.pkl` 是 Q4 计算缓存和复现辅助文件，保留。
-- 如果重新运行 Q3/Q4，部分图表和结果表会被覆盖。
-- 论文写作时建议优先参考 `data/output/q1_writer_guide.md` 至 `data/output/q4_writer_guide.md`。
